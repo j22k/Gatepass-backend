@@ -1,145 +1,174 @@
 // helpers/adminHelpers.js
 const pool = require("../db/pool");
+const bcrypt = require("bcryptjs");
 
 const adminHelpers = {
-  // Users
-  async createUser({ name, email, phone, role_id, usertype_id }) {
+  // -------------------- Users --------------------
+  async createUser({ full_name, email, phone, password, is_active = true }) {
+    const password_hash = await bcrypt.hash(password, 10);
     const query = `
-      INSERT INTO users (full_name, email, phone, role_id, user_type_id) 
-      VALUES ($1, $2, $3, $4, $5) 
-      RETURNING *`;
-    const values = [name, email, phone, role_id, usertype_id];
+      INSERT INTO users (full_name, email, phone, password_hash, is_active)
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING id, full_name, email, phone, is_active, created_at, last_login;
+    `;
+    const values = [full_name, email, phone || null, password_hash, is_active];
     const { rows } = await pool.query(query, values);
     return rows[0];
   },
 
   async getAllUsers() {
-    const { rows } = await pool.query("SELECT * FROM users ORDER BY created_at DESC");
-    return rows;
-  },
-
-  // Warehouses
-  async getAllWarehouses() {
-    const { rows } = await pool.query("SELECT * FROM warehouses");
-    return rows;
-  },
-
-  async createWarehouse({ name, location }) {
-    const query = `
-      INSERT INTO warehouses (name, address) 
-      VALUES ($1, $2) 
-      RETURNING *`;
-    const { rows } = await pool.query(query, [name, location]);
-    return rows[0];
-  },
-
-  // Roles
-  async getAllRoles() {
-    const { rows } = await pool.query("SELECT * FROM roles");
-    return rows;
-  },
-
-  async createRole({ name }) {
-    const query = `INSERT INTO roles (name) VALUES ($1) RETURNING *`;
-    const { rows } = await pool.query(query, [name]);
-    return rows[0];
-  },
-  
-  async createVisitorType({ name, description }) {
-    const query = `
-      INSERT INTO visitor_types (name, description)
-      VALUES ($1, $2)
-      RETURNING *;
-    `;
-    const { rows } = await pool.query(query, [name, description]);
-    return rows[0];
-  },
-
-  // Get all visitor types
-  async getAllVisitorTypes() {
     const { rows } = await pool.query(
-      "SELECT * FROM visitor_types ORDER BY created_at DESC"
+      `SELECT id, full_name, email, phone, is_active, created_at, last_login
+       FROM users
+       ORDER BY created_at DESC`
     );
     return rows;
   },
 
-  // Get visitor type by ID
-  async getVisitorTypeById(id) {
-    const { rows } = await pool.query(
-      "SELECT * FROM visitor_types WHERE id = $1",
-      [id]
-    );
-    return rows[0];
-  },
-
-  // Update visitor type
-  async updateVisitorType(id, { name, description }) {
+  async assignRoleToUser(user_id, role_id, assigned_by = null) {
     const query = `
-      UPDATE visitor_types
-      SET name = COALESCE($1, name),
-          description = COALESCE($2, description)
-      WHERE id = $3
-      RETURNING *;
-    `;
-    const values = [name, description, id];
-    const { rows } = await pool.query(query, values);
-    return rows[0];
-  },
-
-  // Delete visitor type
-  async deleteVisitorType(id) {
-    const query = "DELETE FROM visitor_types WHERE id = $1 RETURNING *;";
-    const { rows } = await pool.query(query, [id]);
-    return rows[0];
-  },
-  async createWarehouse({ name, address, timezone }) {
-    const query = `
-      INSERT INTO warehouses (name, address, timezone)
+      INSERT INTO user_roles (user_id, role_id, assigned_by)
       VALUES ($1, $2, $3)
-      RETURNING *;
+      ON CONFLICT (user_id, role_id) DO NOTHING
+      RETURNING user_id, role_id, assigned_at, assigned_by;
     `;
-    const values = [name, address, timezone || "UTC"];
-    const { rows } = await pool.query(query, values);
+    const { rows } = await pool.query(query, [user_id, role_id, assigned_by]);
+    if (!rows[0]) {
+      return { user_id, role_id, message: "Role already assigned" };
+    }
     return rows[0];
   },
 
+  async getUserRoles(user_id) {
+    const { rows } = await pool.query(
+      `
+      SELECT r.id, r.name, r.description, r.created_at
+      FROM user_roles uR
+      JOIN roles r ON r.id = uR.role_id
+      WHERE uR.user_id = $1
+      ORDER BY r.name ASC
+      `,
+      [user_id]
+    );
+    return rows;
+  },
+
+  // -------------------- Roles --------------------
+  async getAllRoles() {
+    const { rows } = await pool.query("SELECT id, name, description, created_at FROM roles ORDER BY name ASC");
+    return rows;
+  },
+
+  async createRole({ name, description }) {
+    const { rows } = await pool.query(
+      "INSERT INTO roles (name, description) VALUES ($1, $2) RETURNING id, name, description, created_at",
+      [name, description || null]
+    );
+    return rows[0];
+  },
+
+  // -------------------- Warehouses --------------------
   async getAllWarehouses() {
     const { rows } = await pool.query(
-      "SELECT * FROM warehouses ORDER BY created_at DESC"
+      "SELECT id, name, address, timezone, created_at, created_by, updated_at, updated_by FROM warehouses ORDER BY created_at DESC"
     );
     return rows;
   },
 
   async getWarehouseById(id) {
     const { rows } = await pool.query(
-      "SELECT * FROM warehouses WHERE id = $1",
+      "SELECT id, name, address, timezone, created_at, created_by, updated_at, updated_by FROM warehouses WHERE id = $1",
       [id]
     );
     return rows[0];
   },
 
-  async updateWarehouse(id, { name, address, timezone }) {
+  async createWarehouse({ name, address, timezone = "UTC", created_by = null }) {
+    const query = `
+      INSERT INTO warehouses (name, address, timezone, created_by)
+      VALUES ($1, $2, $3, $4)
+      RETURNING id, name, address, timezone, created_at, created_by, updated_at, updated_by;
+    `;
+    const values = [name, address || null, timezone || "UTC", created_by];
+    const { rows } = await pool.query(query, values);
+    return rows[0];
+  },
+
+  async updateWarehouse(id, { name, address, timezone, updated_by = null }) {
     const query = `
       UPDATE warehouses
-      SET name = COALESCE($1, name),
-          address = COALESCE($2, address),
-          timezone = COALESCE($3, timezone)
-      WHERE id = $4
-      RETURNING *;
+      SET
+        name = COALESCE($1, name),
+        address = COALESCE($2, address),
+        timezone = COALESCE($3, timezone),
+        updated_at = now(),
+        updated_by = $4
+      WHERE id = $5
+      RETURNING id, name, address, timezone, created_at, created_by, updated_at, updated_by;
     `;
-    const values = [name, address, timezone, id];
+    const values = [name || null, address || null, timezone || null, updated_by, id];
     const { rows } = await pool.query(query, values);
     return rows[0];
   },
 
   async deleteWarehouse(id) {
-    const query = "DELETE FROM warehouses WHERE id = $1 RETURNING *;";
+    const query = "DELETE FROM warehouses WHERE id = $1 RETURNING id;";
     const { rows } = await pool.query(query, [id]);
     return rows[0];
   },
 
+  // -------------------- Visitor Types --------------------
+  async getAllVisitorTypes() {
+    const { rows } = await pool.query(
+      `SELECT id, name, description, created_at, created_by, updated_at, updated_by
+       FROM visitor_types
+       ORDER BY name ASC`
+    );
+    return rows;
+  },
+
+  async getVisitorTypeById(id) {
+    const { rows } = await pool.query(
+      `SELECT id, name, description, created_at, created_by, updated_at, updated_by
+       FROM visitor_types
+       WHERE id = $1`,
+      [id]
+    );
+    return rows[0];
+  },
+
+  async createVisitorType({ name, description, created_by = null }) {
+    const { rows } = await pool.query(
+      `INSERT INTO visitor_types (name, description, created_by)
+       VALUES ($1, $2, $3)
+       RETURNING id, name, description, created_at, created_by, updated_at, updated_by`,
+      [name, description, created_by]
+    );
+    return rows[0];
+  },
+
+  async updateVisitorType(id, { name, description, updated_by = null }) {
+    const { rows } = await pool.query(
+      `UPDATE visitor_types
+       SET
+         name = COALESCE($1, name),
+         description = COALESCE($2, description),
+         updated_at = now(),
+         updated_by = $3
+       WHERE id = $4
+       RETURNING id, name, description, created_at, created_by, updated_at, updated_by`,
+      [name || null, description || null, updated_by, id]
+    );
+    return rows[0];
+  },
+
+  async deleteVisitorType(id) {
+    const { rows } = await pool.query(
+      `DELETE FROM visitor_types WHERE id = $1 RETURNING id`,
+      [id]
+    );
+    return rows[0];
+  },
 };
-
-
 
 module.exports = adminHelpers;

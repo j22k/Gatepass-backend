@@ -1,18 +1,16 @@
-const pool = require("../src/db/pool");
+const pool = require("../src/db/pool"); // adjust path if your pool is at src/db/pool
 const bcrypt = require("bcrypt");
 require("dotenv").config();
 
 (async () => {
   try {
     const {
-      ADMIN_NAME,
+      ADMIN_NAME = "Admin",
       ADMIN_EMAIL,
-      ADMIN_PHONE,
+      ADMIN_PHONE = null,
       ADMIN_PASSWORD,
-      ADMIN_ROLE,
-      ADMIN_ROLE_DESC,
-      ADMIN_USER_TYPE,
-      ADMIN_USER_TYPE_DESC,
+      ADMIN_ROLE = "Admin",
+      ADMIN_ROLE_DESC = "Full system access",
     } = process.env;
 
     if (!ADMIN_EMAIL || !ADMIN_PASSWORD) {
@@ -21,44 +19,50 @@ require("dotenv").config();
 
     const passwordHash = await bcrypt.hash(ADMIN_PASSWORD, 10);
 
-    // ✅ Seed Role
-    const { rows: roleRows } = await pool.query(
-      `INSERT INTO roles (name, description)
-       VALUES ($1, $2)
-       ON CONFLICT (name) DO UPDATE SET description = EXCLUDED.description
-       RETURNING *`,
-      [ADMIN_ROLE, ADMIN_ROLE_DESC]
+    // Ensure Admin role exists
+    let { rows: roleRows } = await pool.query(
+      `SELECT id, name FROM roles WHERE name = $1`,
+      [ADMIN_ROLE]
     );
-    const adminRole = roleRows[0];
+    let adminRole = roleRows[0];
+    if (!adminRole) {
+      ({ rows: roleRows } = await pool.query(
+        `INSERT INTO roles (name, description)
+         VALUES ($1, $2)
+         ON CONFLICT (name) DO UPDATE SET description = EXCLUDED.description
+         RETURNING id, name`,
+        [ADMIN_ROLE, ADMIN_ROLE_DESC]
+      ));
+      adminRole = roleRows[0];
+    }
 
-    // ✅ Seed User Type
-    const { rows: userTypeRows } = await pool.query(
-      `INSERT INTO user_types (name, description)
-       VALUES ($1, $2)
-       ON CONFLICT (name) DO UPDATE SET description = EXCLUDED.description
+    // Upsert Admin user WITH role_id (required by NOT NULL constraint)
+    const { rows: userRows } = await pool.query(
+      `INSERT INTO users (full_name, email, phone, password_hash, is_active, role_id)
+       VALUES ($1, $2, $3, $4, true, $5)
+       ON CONFLICT (email) DO UPDATE
+         SET full_name = EXCLUDED.full_name,
+             phone = EXCLUDED.phone,
+             password_hash = EXCLUDED.password_hash,
+             is_active = true,
+             role_id = EXCLUDED.role_id
        RETURNING *`,
-      [ADMIN_USER_TYPE, ADMIN_USER_TYPE_DESC]
+      [ADMIN_NAME, ADMIN_EMAIL, ADMIN_PHONE, passwordHash, adminRole.id]
     );
-    const superUserType = userTypeRows[0];
+    const adminUser = userRows[0];
 
-    // ✅ Seed Admin User
+    // Also assign Admin role via user_roles for compatibility with code that still reads from user_roles
     await pool.query(
-      `INSERT INTO users (full_name, email, phone, password_hash, role_id, user_type_id)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       ON CONFLICT (email) DO NOTHING`,
-      [
-        ADMIN_NAME,
-        ADMIN_EMAIL,
-        ADMIN_PHONE,
-        passwordHash,
-        adminRole.id,
-        superUserType.id,
-      ]
+      `INSERT INTO user_roles (user_id, role_id, assigned_by)
+       VALUES ($1, $2, $1)
+       ON CONFLICT (user_id, role_id) DO NOTHING`,
+      [adminUser.id, adminRole.id]
     );
 
-    console.log(`✅ Admin user seeded: ${ADMIN_EMAIL}`);
+    console.log(`✅ Admin user seeded and role assigned: ${ADMIN_EMAIL}`);
   } catch (err) {
     console.error("❌ Seeding failed", err);
+    process.exitCode = 1;
   } finally {
     await pool.end();
   }
