@@ -23,6 +23,7 @@ router.get(
   }
 );
 
+
 // Create user (permission: user.create)
 // Accepts body: { full_name, email, phone, password, is_active?, roles?: [role_id] }
 router.post(
@@ -32,20 +33,33 @@ router.post(
   async (req, res) => {
     try {
       const { full_name, email, phone, password, is_active, roles } = req.body;
+      console.log(req.body);
+      
       if (!full_name || !email || !password) {
         return res.status(400).json({ error: "full_name, email, and password are required" });
       }
+      
+      // Extract role_id from roles array (use first role if provided)
+      let role_id = null;
+      if (Array.isArray(roles) && roles.length > 0) {
+        role_id = roles[0]; // Assume the first role is the primary one
+      } else {
+        return res.status(400).json({ error: "At least one role is required" });
+      }
+      
       const user = await adminHelpers.createUser({
         full_name,
         email,
         phone,
         password,
         is_active: typeof is_active === "boolean" ? is_active : true,
+        role_id, // Now passing role_id
       });
 
-      if (Array.isArray(roles) && roles.length) {
-        for (const roleId of roles) {
-          await adminHelpers.assignRoleToUser(user.id, roleId, req.user.id);
+      // Assign additional roles to user_roles (if more than one)
+      if (Array.isArray(roles) && roles.length > 1) {
+        for (let i = 1; i < roles.length; i++) { // Start from 1 to skip the primary role
+          await adminHelpers.assignRoleToUser(user.id, roles[i], req.user.id);
         }
       }
 

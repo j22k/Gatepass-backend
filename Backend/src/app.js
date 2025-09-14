@@ -7,11 +7,13 @@ const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const adminHelpers = require("./helpers/adminHelpers");
 const { authenticateUser } = require("./helpers/authHelpers");
+const cors = require('cors');
 // JWT secret
 const JWT_SECRET = process.env.JWT_SECRET || "dev_secret";
 
 const app = express();
 
+app.use(cors());
 app.use(express.json());
 
 

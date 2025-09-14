@@ -4,17 +4,20 @@ const bcrypt = require("bcryptjs");
 
 const adminHelpers = {
   // -------------------- Users --------------------
-  async createUser({ full_name, email, phone, password, is_active = true }) {
-    const password_hash = await bcrypt.hash(password, 10);
-    const query = `
-      INSERT INTO users (full_name, email, phone, password_hash, is_active)
-      VALUES ($1, $2, $3, $4, $5)
-      RETURNING id, full_name, email, phone, is_active, created_at, last_login;
-    `;
-    const values = [full_name, email, phone || null, password_hash, is_active];
-    const { rows } = await pool.query(query, values);
-    return rows[0];
-  },
+  // ...existing code...
+
+async createUser({ full_name, email, phone, password, is_active = true, role_id }) {
+  const password_hash = await bcrypt.hash(password, 10);
+  const query = `
+    INSERT INTO users (full_name, email, phone, password_hash, is_active, role_id)
+    VALUES ($1, $2, $3, $4, $5, $6)
+    RETURNING id, full_name, email, phone, is_active, created_at, last_login, role_id;
+  `;
+  const values = [full_name, email, phone || null, password_hash, is_active, role_id];
+  const { rows } = await pool.query(query, values);
+  return rows[0];
+},
+
 
   async getAllUsers() {
     const { rows } = await pool.query(
