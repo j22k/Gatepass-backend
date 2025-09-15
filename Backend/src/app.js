@@ -50,7 +50,7 @@ app.post("/login", async (req, res) => {
         redirectUrl = "/qa/dashboard";
         break;
       default:
-        redirectUrl = "/visitor/dashboard"; // For any other roles or visitors
+        redirectUrl = "/visitor/dashboard";
         break;
     }
     
