@@ -5,11 +5,9 @@ const isProduction = process.env.NODE_ENV === "production";
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ...(isProduction && {
-    ssl: {
-      rejectUnauthorized: false, // allow self-signed cert on Render
-    },
-  }),
+  ssl: isProduction
+    ? { rejectUnauthorized: false } // Render requires SSL
+    : false, // Local dev can disable SSL if using a local DB
 });
 
 module.exports = pool;
