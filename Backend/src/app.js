@@ -35,7 +35,26 @@ app.post("/login", async (req, res) => {
       return res.status(401).json({ error: "Invalid credentials" });
     }
     const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: "8h" });
-    res.json({ token });
+    
+    // Determine redirect URL based on role
+    let redirectUrl = "/dashboard"; // Default fallback
+    switch (user.role_name) {
+      case "Admin":
+        redirectUrl = "/admin/dashboard";
+        break;
+      case "Manager":
+      case "Receptionist":
+        redirectUrl = "/manager/dashboard";
+        break;
+      case "QA":
+        redirectUrl = "/qa/dashboard";
+        break;
+      default:
+        redirectUrl = "/visitor/dashboard"; // For any other roles or visitors
+        break;
+    }
+    
+    res.status(200).json({ token, redirectUrl }); // Explicit 200 for clarity
   } catch (err) {
     console.error("Login error:", err);
     res.status(500).json({ error: "Internal server error" });
