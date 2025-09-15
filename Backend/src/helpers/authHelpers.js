@@ -1,6 +1,6 @@
 // helpers/authHelpers.js
 const bcrypt = require("bcryptjs");
-const pool = require("../db/Pool");
+const pool = require("../db/pool");
 
 // Authenticate user by email and password
 async function authenticateUser(email, password) {

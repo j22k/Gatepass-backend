@@ -1,5 +1,5 @@
 // helpers/adminHelpers.js
-const pool = require("../db/Pool");
+const pool = require("../db/pool");
 const bcrypt = require("bcryptjs");
 
 const adminHelpers = {
