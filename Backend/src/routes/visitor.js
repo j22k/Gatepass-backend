@@ -10,7 +10,6 @@ const { requireAuth } = require("../middleware/auth");
 // READ all warehouses (permission: warehouse.read)
 router.get(
   "/warehouses",
-  requireAuth,
   // requirePermission("warehouse.read"),
   async (_req, res) => {
     try {
@@ -29,7 +28,6 @@ router.get(
 // and grant that permission to roles that need it.
 router.get(
   "/visitor-types",
-  requireAuth,
   async (_req, res) => {
     try {
       const types = await visitorHelper.getAllVisitorTypes();
