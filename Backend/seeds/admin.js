@@ -1,5 +1,5 @@
-const pool = require("../src/db/pool"); // adjust path if your pool is at src/db/pool
-const bcrypt = require("bcrypt");
+const pool = require("../src/db/Pool");
+const bcrypt = require("bcryptjs");
 require("dotenv").config();
 
 (async () => {
@@ -36,30 +36,33 @@ require("dotenv").config();
       adminRole = roleRows[0];
     }
 
-    // Upsert Admin user WITH role_id (required by NOT NULL constraint)
+    // Ensure we have a warehouse to attach (use Default Warehouse created by migrations)
+    const { rows: whRows } = await pool.query(
+      `SELECT id FROM warehouses WHERE name = $1 ORDER BY created_at ASC LIMIT 1`,
+      ["Default Warehouse"]
+    );
+    const warehouse = whRows[0];
+    if (!warehouse) {
+      throw new Error("No warehouse found. Run migrations to seed 'Default Warehouse' first.");
+    }
+
+    // Upsert Admin user WITH role_id and warehouse_id
     const { rows: userRows } = await pool.query(
-      `INSERT INTO users (full_name, email, phone, password_hash, is_active, role_id)
-       VALUES ($1, $2, $3, $4, true, $5)
+      `INSERT INTO users (full_name, email, phone, password_hash, is_active, role_id, warehouse_id)
+       VALUES ($1, $2, $3, $4, true, $5, $6)
        ON CONFLICT (email) DO UPDATE
          SET full_name = EXCLUDED.full_name,
              phone = EXCLUDED.phone,
              password_hash = EXCLUDED.password_hash,
              is_active = true,
-             role_id = EXCLUDED.role_id
+             role_id = EXCLUDED.role_id,
+             warehouse_id = EXCLUDED.warehouse_id
        RETURNING *`,
-      [ADMIN_NAME, ADMIN_EMAIL, ADMIN_PHONE, passwordHash, adminRole.id]
+      [ADMIN_NAME, ADMIN_EMAIL, ADMIN_PHONE, passwordHash, adminRole.id, warehouse.id]
     );
     const adminUser = userRows[0];
 
-    // Also assign Admin role via user_roles for compatibility with code that still reads from user_roles
-    await pool.query(
-      `INSERT INTO user_roles (user_id, role_id, assigned_by)
-       VALUES ($1, $2, $1)
-       ON CONFLICT (user_id, role_id) DO NOTHING`,
-      [adminUser.id, adminRole.id]
-    );
-
-    console.log(`✅ Admin user seeded and role assigned: ${ADMIN_EMAIL}`);
+    console.log(`✅ Admin user seeded: ${ADMIN_EMAIL} (warehouse_id=${adminUser.warehouse_id})`);
   } catch (err) {
     console.error("❌ Seeding failed", err);
     process.exitCode = 1;

@@ -1,52 +1,42 @@
-const bcrypt = require("bcryptjs");
 // helpers/authHelpers.js
-const pool = require("../db/pool");
-
-
+const bcrypt = require("bcryptjs");
+const pool = require("../db/Pool");
 
 // Authenticate user by email and password
 async function authenticateUser(email, password) {
-  // Find user by email
   const { rows } = await pool.query(
-    `SELECT id, full_name, email, phone, is_active, created_at, last_login, password_hash FROM users WHERE email = $1`,
+    `SELECT u.id, u.full_name, u.email, u.phone, u.is_active, u.created_at, u.last_login,
+            u.password_hash, r.name AS role_name, w.id AS warehouse_id, w.name AS warehouse_name
+     FROM users u
+     JOIN roles r ON r.id = u.role_id
+     JOIN warehouses w ON w.id = u.warehouse_id
+     WHERE u.email = $1`,
     [email]
   );
   const user = rows[0];
   if (!user) return null;
+
   const valid = await bcrypt.compare(password, user.password_hash);
   if (!valid) return null;
-  // Remove password_hash before returning
+
   delete user.password_hash;
   return user;
 }
+
 async function getUserById(id) {
   const { rows } = await pool.query(
-    `SELECT id, full_name, email, phone, is_active, created_at, last_login
-     FROM users
-     WHERE id = $1`,
+    `SELECT u.id, u.full_name, u.email, u.phone, u.is_active, u.created_at, u.last_login,
+            r.name AS role_name, w.id AS warehouse_id, w.name AS warehouse_name
+     FROM users u
+     JOIN roles r ON r.id = u.role_id
+     JOIN warehouses w ON w.id = u.warehouse_id
+     WHERE u.id = $1`,
     [id]
   );
   return rows[0];
 }
 
-async function getUserPermissions(userId) {
-  // Gather distinct permission names assigned via roles
-  const { rows } = await pool.query(
-    `
-    SELECT DISTINCT p.name
-    FROM user_roles ur
-    JOIN role_permissions rp ON rp.role_id = ur.role_id
-    JOIN permissions p ON p.id = rp.permission_id
-    WHERE ur.user_id = $1
-    `,
-    [userId]
-  );
-  return rows.map((r) => r.name);
-}
-
-
 module.exports = {
   getUserById,
-  getUserPermissions,
   authenticateUser,
 };

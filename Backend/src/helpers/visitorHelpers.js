@@ -1,5 +1,5 @@
 // helpers/visitorHelpers.js
-const pool = require("../db/pool");
+const pool = require("../db/Pool");
 
 const visitorHelper = {
   async getAllWarehouses() {

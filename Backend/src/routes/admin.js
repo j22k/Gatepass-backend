@@ -1,360 +1,269 @@
 const express = require("express");
 const router = express.Router();
-
 const adminHelpers = require("../helpers/adminHelpers");
-const { requireAuth } = require("../middleware/auth");
-const { requirePermission, requireAnyPermission } = require("../middleware/authorize");
+const { requireAuth, requireRole } = require("../middleware/auth");
 
-// -------------------- Users --------------------
-
-// List users (permission: user.read)
-router.get(
-  "/users",
-  requireAuth,
-  requirePermission("user.read"),
-  async (req, res) => {
-    try {
-      const users = await adminHelpers.getAllUsers();
-      res.json(users);
-    } catch (err) {
-      console.error("Error fetching users:", err);
-      res.status(500).json({ error: "Internal server error" });
-    }
+// -------------------- Users CRUD --------------------
+router.get("/users", requireAuth, requireRole("Admin"), async (_req, res) => {
+  try {
+    const users = await adminHelpers.getAllUsers();
+    res.json(users);
+  } catch (err) {
+    console.error("Error fetching users:", err);
+    res.status(500).json({ error: "Internal server error" });
   }
-);
+});
 
-
-// Create user (permission: user.create)
-// Accepts body: { full_name, email, phone, password, is_active?, roles?: [role_id] }
-router.post(
-  "/users",
-  requireAuth,
-  requirePermission("user.create"),
-  async (req, res) => {
-    try {
-      const { full_name, email, phone, password, is_active, roles } = req.body;
-      console.log(req.body);
-      
-      if (!full_name || !email || !password) {
-        return res.status(400).json({ error: "full_name, email, and password are required" });
-      }
-      
-      // Extract role_id from roles array (use first role if provided)
-      let role_id = null;
-      if (Array.isArray(roles) && roles.length > 0) {
-        role_id = roles[0]; // Assume the first role is the primary one
-      } else {
-        return res.status(400).json({ error: "At least one role is required" });
-      }
-      
-      const user = await adminHelpers.createUser({
-        full_name,
-        email,
-        phone,
-        password,
-        is_active: typeof is_active === "boolean" ? is_active : true,
-        role_id, // Now passing role_id
-      });
-
-      // Assign additional roles to user_roles (if more than one)
-      if (Array.isArray(roles) && roles.length > 1) {
-        for (let i = 1; i < roles.length; i++) { // Start from 1 to skip the primary role
-          await adminHelpers.assignRoleToUser(user.id, roles[i], req.user.id);
-        }
-      }
-
-      res.status(201).json(user);
-    } catch (err) {
-      console.error("Error creating user:", err);
-      res.status(500).json({ error: "Internal server error" });
+router.post("/users", requireAuth, requireRole("Admin"), async (req, res) => {
+  try {
+    const { full_name, email, phone, password, role_id, warehouse_id } = req.body;
+    if (!full_name || !email || !password || !role_id || !warehouse_id) {
+      return res.status(400).json({ error: "Missing required fields" });
     }
+    const user = await adminHelpers.createUser({
+      full_name,
+      email,
+      phone,
+      password,
+      role_id,
+      warehouse_id,
+    });
+    res.status(201).json(user);
+  } catch (err) {
+    console.error("Error creating user:", err);
+    res.status(500).json({ error: "Internal server error" });
   }
-);
+});
 
-// Assign role to a user (permission: user.update)
-router.post(
-  "/users/:id/roles",
-  requireAuth,
-  requirePermission("user.update"),
-  async (req, res) => {
-    try {
-      const { role_id } = req.body;
-      if (!role_id) {
-        return res.status(400).json({ error: "role_id is required" });
-      }
-      const assigned = await adminHelpers.assignRoleToUser(
-        req.params.id,
-        role_id,
-        req.user.id
-      );
-      res.status(201).json(assigned);
-    } catch (err) {
-      console.error("Error assigning role to user:", err);
-      res.status(500).json({ error: "Internal server error" });
-    }
+router.get("/users/:id", requireAuth, requireRole("Admin"), async (req, res) => {
+  try {
+    const user = await adminHelpers.getUserById(req.params.id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+    res.json(user);
+  } catch (err) {
+    console.error("Error fetching user:", err);
+    res.status(500).json({ error: "Internal server error" });
   }
-);
+});
 
-// Get a user's roles (permission: user.read)
-router.get(
-  "/users/:id/roles",
-  requireAuth,
-  requirePermission("user.read"),
-  async (req, res) => {
-    try {
-      const roles = await adminHelpers.getUserRoles(req.params.id);
-      res.json(roles);
-    } catch (err) {
-      console.error("Error fetching user roles:", err);
-      res.status(500).json({ error: "Internal server error" });
-    }
+router.put("/users/:id", requireAuth, requireRole("Admin"), async (req, res) => {
+  try {
+    const { full_name, email, phone, password, is_active, role_id, warehouse_id } = req.body;
+    const user = await adminHelpers.updateUser(req.params.id, {
+      full_name,
+      email,
+      phone,
+      password,
+      is_active,
+      role_id,
+      warehouse_id,
+    });
+    if (!user) return res.status(404).json({ error: "User not found" });
+    res.json(user);
+  } catch (err) {
+    console.error("Error updating user:", err);
+    res.status(500).json({ error: "Internal server error" });
   }
-);
+});
 
-// -------------------- Roles --------------------
-
-// List roles (permission: user.read)
-router.get(
-  "/roles",
-  requireAuth,
-  requirePermission("user.read"),
-  async (_req, res) => {
-    try {
-      const roles = await adminHelpers.getAllRoles();
-      res.json(roles);
-    } catch (err) {
-      console.error("Error fetching roles:", err);
-      res.status(500).json({ error: "Internal server error" });
-    }
+router.delete("/users/:id", requireAuth, requireRole("Admin"), async (req, res) => {
+  try {
+    const result = await adminHelpers.deleteUser(req.params.id);
+    if (!result) return res.status(404).json({ error: "User not found" });
+    res.json({ message: "User deleted" });
+  } catch (err) {
+    console.error("Error deleting user:", err);
+    res.status(500).json({ error: "Internal server error" });
   }
-);
+});
 
-// Create role (require ability to manage users -> user.update)
-router.post(
-  "/roles",
-  requireAuth,
-  requirePermission("user.update"),
-  async (req, res) => {
-    try {
-      const { name, description } = req.body;
-      if (!name) {
-        return res.status(400).json({ error: "name is required" });
-      }
-      const role = await adminHelpers.createRole({ name, description });
-      res.status(201).json(role);
-    } catch (err) {
-      console.error("Error creating role:", err);
-      res.status(500).json({ error: "Internal server error" });
-    }
+// -------------------- Roles CRUD --------------------
+router.get("/roles", requireAuth, requireRole("Admin"), async (_req, res) => {
+  try {
+    const roles = await adminHelpers.getAllRoles();
+    res.json(roles);
+  } catch (err) {
+    console.error("Error fetching roles:", err);
+    res.status(500).json({ error: "Internal server error" });
   }
-);
+});
 
-// -------------------- Warehouses --------------------
-
-// List warehouses (permission: warehouse.read)
-router.get(
-  "/warehouses",
-  requireAuth,
-  requirePermission("warehouse.read"),
-  async (_req, res) => {
-    try {
-      const warehouses = await adminHelpers.getAllWarehouses();
-      res.json(warehouses);
-    } catch (err) {
-      console.error("Error fetching warehouses:", err);
-      res.status(500).json({ error: "Internal server error" });
-    }
+router.post("/roles", requireAuth, requireRole("Admin"), async (req, res) => {
+  try {
+    const { name, description } = req.body;
+    if (!name) return res.status(400).json({ error: "Name is required" });
+    const role = await adminHelpers.createRole({ name, description });
+    res.status(201).json(role);
+  } catch (err) {
+    console.error("Error creating role:", err);
+    res.status(500).json({ error: "Internal server error" });
   }
-);
+});
 
-// Get one warehouse (permission: warehouse.read)
-router.get(
-  "/warehouses/:id",
-  requireAuth,
-  requirePermission("warehouse.read"),
-  async (req, res) => {
-    try {
-      const warehouse = await adminHelpers.getWarehouseById(req.params.id);
-      if (!warehouse) {
-        return res.status(404).json({ error: "Warehouse not found" });
-      }
-      res.json(warehouse);
-    } catch (err) {
-      console.error("Error fetching warehouse:", err);
-      res.status(500).json({ error: "Internal server error" });
-    }
+router.get("/roles/:id", requireAuth, requireRole("Admin"), async (req, res) => {
+  try {
+    const role = await adminHelpers.getRoleById(req.params.id);
+    if (!role) return res.status(404).json({ error: "Role not found" });
+    res.json(role);
+  } catch (err) {
+    console.error("Error fetching role:", err);
+    res.status(500).json({ error: "Internal server error" });
   }
-);
+});
 
-// Create warehouse (permission: warehouse.create)
-// Body: { name, address, timezone? }
-router.post(
-  "/warehouses",
-  requireAuth,
-  requirePermission("warehouse.create"),
-  async (req, res) => {
-    try {
-      const { name, address, timezone } = req.body;
-      if (!name) return res.status(400).json({ error: "name is required" });
-
-      const warehouse = await adminHelpers.createWarehouse({
-        name,
-        address,
-        timezone,
-        created_by: req.user.id,
-      });
-
-      res.status(201).json(warehouse);
-    } catch (err) {
-      console.error("Error creating warehouse:", err);
-      res.status(500).json({ error: "Internal server error" });
-    }
+router.put("/roles/:id", requireAuth, requireRole("Admin"), async (req, res) => {
+  try {
+    const { name, description } = req.body;
+    const role = await adminHelpers.updateRole(req.params.id, { name, description });
+    if (!role) return res.status(404).json({ error: "Role not found" });
+    res.json(role);
+  } catch (err) {
+    console.error("Error updating role:", err);
+    res.status(500).json({ error: "Internal server error" });
   }
-);
+});
 
-// Update warehouse (permission: warehouse.update)
-router.put(
-  "/warehouses/:id",
-  requireAuth,
-  requirePermission("warehouse.update"),
-  async (req, res) => {
-    try {
-      const updated = await adminHelpers.updateWarehouse(
-        req.params.id,
-        { ...req.body, updated_by: req.user.id }
-      );
-      if (!updated) {
-        return res.status(404).json({ error: "Warehouse not found" });
-      }
-      res.json(updated);
-    } catch (err) {
-      console.error("Error updating warehouse:", err);
-      res.status(500).json({ error: "Internal server error" });
-    }
+router.delete("/roles/:id", requireAuth, requireRole("Admin"), async (req, res) => {
+  try {
+    const result = await adminHelpers.deleteRole(req.params.id);
+    if (!result) return res.status(404).json({ error: "Role not found" });
+    res.json({ message: "Role deleted" });
+  } catch (err) {
+    console.error("Error deleting role:", err);
+    res.status(500).json({ error: "Internal server error" });
   }
-);
+});
 
-// Delete warehouse (permission: warehouse.delete)
-router.delete(
-  "/warehouses/:id",
-  requireAuth,
-  requirePermission("warehouse.delete"),
-  async (req, res) => {
-    try {
-      const deleted = await adminHelpers.deleteWarehouse(req.params.id);
-      if (!deleted) {
-        return res.status(404).json({ error: "Warehouse not found" });
-      }
-      res.json({ message: "Warehouse deleted successfully" });
-    } catch (err) {
-      console.error("Error deleting warehouse:", err);
-      res.status(500).json({ error: "Internal server error" });
-    }
+// -------------------- Warehouses CRUD --------------------
+router.get("/warehouses", requireAuth, requireRole("Admin"), async (_req, res) => {
+  try {
+    const warehouses = await adminHelpers.getAllWarehouses();
+    res.json(warehouses);
+  } catch (err) {
+    console.error("Error fetching warehouses:", err);
+    res.status(500).json({ error: "Internal server error" });
   }
-);
+});
 
-// -------------------- Visitor Types (Admin managed) --------------------
-
-// List visitor types (permission: visitor_type.read)
-router.get(
-  "/visitor-types",
-  requireAuth,
-  requirePermission("visitor_type.read"),
-  async (_req, res) => {
-    try {
-      const types = await adminHelpers.getAllVisitorTypes();
-      res.json(types);
-    } catch (err) {
-      console.error("Error fetching visitor types:", err);
-      res.status(500).json({ error: "Internal server error" });
-    }
+router.post("/warehouses", requireAuth, requireRole("Admin"), async (req, res) => {
+  try {
+    const { name, address, timezone } = req.body;
+    if (!name) return res.status(400).json({ error: "Name is required" });
+    const warehouse = await adminHelpers.createWarehouse({
+      name,
+      address,
+      timezone,
+      created_by: req.user.id,
+    });
+    res.status(201).json(warehouse);
+  } catch (err) {
+    console.error("Error creating warehouse:", err);
+    res.status(500).json({ error: "Internal server error" });
   }
-);
+});
 
-// Get a visitor type (permission: visitor_type.read)
-router.get(
-  "/visitor-types/:id",
-  requireAuth,
-  requirePermission("visitor_type.read"),
-  async (req, res) => {
-    try {
-      const type = await adminHelpers.getVisitorTypeById(req.params.id);
-      if (!type) return res.status(404).json({ error: "Visitor type not found" });
-      res.json(type);
-    } catch (err) {
-      console.error("Error fetching visitor type:", err);
-      res.status(500).json({ error: "Internal server error" });
-    }
+router.get("/warehouses/:id", requireAuth, requireRole("Admin"), async (req, res) => {
+  try {
+    const warehouse = await adminHelpers.getWarehouseById(req.params.id);
+    if (!warehouse) return res.status(404).json({ error: "Warehouse not found" });
+    res.json(warehouse);
+  } catch (err) {
+    console.error("Error fetching warehouse:", err);
+    res.status(500).json({ error: "Internal server error" });
   }
-);
+});
 
-// Create visitor type (permission: visitor_type.create)
-router.post(
-  "/visitor-types",
-  requireAuth,
-  requirePermission("visitor_type.create"),
-  async (req, res) => {
-    try {
-      const { name, description } = req.body;
-      if (!name || !description) {
-        return res.status(400).json({ error: "name and description are required" });
-      }
-      const created = await adminHelpers.createVisitorType({
-        name,
-        description,
-        created_by: req.user.id,
-      });
-      res.status(201).json(created);
-    } catch (err) {
-      console.error("Error creating visitor type:", err);
-      if (err.code === "23505") {
-        return res.status(409).json({ error: "Visitor type name must be unique" });
-      }
-      res.status(500).json({ error: "Internal server error" });
-    }
+router.put("/warehouses/:id", requireAuth, requireRole("Admin"), async (req, res) => {
+  try {
+    const { name, address, timezone } = req.body;
+    const warehouse = await adminHelpers.updateWarehouse(req.params.id, {
+      name,
+      address,
+      timezone,
+      updated_by: req.user.id,
+    });
+    if (!warehouse) return res.status(404).json({ error: "Warehouse not found" });
+    res.json(warehouse);
+  } catch (err) {
+    console.error("Error updating warehouse:", err);
+    res.status(500).json({ error: "Internal server error" });
   }
-);
+});
 
-// Update visitor type (permission: visitor_type.update)
-router.put(
-  "/visitor-types/:id",
-  requireAuth,
-  requirePermission("visitor_type.update"),
-  async (req, res) => {
-    try {
-      const { name, description } = req.body;
-      const updated = await adminHelpers.updateVisitorType(req.params.id, {
-        name,
-        description,
-        updated_by: req.user.id,
-      });
-      if (!updated) return res.status(404).json({ error: "Visitor type not found" });
-      res.json(updated);
-    } catch (err) {
-      console.error("Error updating visitor type:", err);
-      if (err.code === "23505") {
-        return res.status(409).json({ error: "Visitor type name must be unique" });
-      }
-      res.status(500).json({ error: "Internal server error" });
-    }
+router.delete("/warehouses/:id", requireAuth, requireRole("Admin"), async (req, res) => {
+  try {
+    const result = await adminHelpers.deleteWarehouse(req.params.id);
+    if (!result) return res.status(404).json({ error: "Warehouse not found" });
+    res.json({ message: "Warehouse deleted" });
+  } catch (err) {
+    console.error("Error deleting warehouse:", err);
+    res.status(500).json({ error: "Internal server error" });
   }
-);
+});
 
-// Delete visitor type (permission: visitor_type.delete)
-router.delete(
-  "/visitor-types/:id",
-  requireAuth,
-  requirePermission("visitor_type.delete"),
-  async (req, res) => {
-    try {
-      const deleted = await adminHelpers.deleteVisitorType(req.params.id);
-      if (!deleted) return res.status(404).json({ error: "Visitor type not found" });
-      res.json({ message: "Visitor type deleted successfully" });
-    } catch (err) {
-      console.error("Error deleting visitor type:", err);
-      res.status(500).json({ error: "Internal server error" });
-    }
+// -------------------- Visitor Types CRUD --------------------
+router.get("/visitor-types", requireAuth, requireRole("Admin"), async (_req, res) => {
+  try {
+    const types = await adminHelpers.getAllVisitorTypes();
+    res.json(types);
+  } catch (err) {
+    console.error("Error fetching visitor types:", err);
+    res.status(500).json({ error: "Internal server error" });
   }
-);
+});
+
+router.post("/visitor-types", requireAuth, requireRole("Admin"), async (req, res) => {
+  try {
+    const { name, description } = req.body;
+    if (!name || !description) return res.status(400).json({ error: "Name and description are required" });
+    const type = await adminHelpers.createVisitorType({
+      name,
+      description,
+      created_by: req.user.id,
+    });
+    res.status(201).json(type);
+  } catch (err) {
+    console.error("Error creating visitor type:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.get("/visitor-types/:id", requireAuth, requireRole("Admin"), async (req, res) => {
+  try {
+    const type = await adminHelpers.getVisitorTypeById(req.params.id);
+    if (!type) return res.status(404).json({ error: "Visitor type not found" });
+    res.json(type);
+  } catch (err) {
+    console.error("Error fetching visitor type:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.put("/visitor-types/:id", requireAuth, requireRole("Admin"), async (req, res) => {
+  try {
+    const { name, description } = req.body;
+    const type = await adminHelpers.updateVisitorType(req.params.id, {
+      name,
+      description,
+      updated_by: req.user.id,
+    });
+    if (!type) return res.status(404).json({ error: "Visitor type not found" });
+    res.json(type);
+  } catch (err) {
+    console.error("Error updating visitor type:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.delete("/visitor-types/:id", requireAuth, requireRole("Admin"), async (req, res) => {
+  try {
+    const result = await adminHelpers.deleteVisitorType(req.params.id);
+    if (!result) return res.status(404).json({ error: "Visitor type not found" });
+    res.json({ message: "Visitor type deleted" });
+  } catch (err) {
+    console.error("Error deleting visitor type:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
 
 module.exports = router;

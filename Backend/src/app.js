@@ -1,11 +1,8 @@
-
 const express = require("express");
 const adminRoutes = require("./routes/admin");
 const visitorRoutes = require("./routes/visitor");
 require("dotenv").config();
 const jwt = require("jsonwebtoken");
-const bcrypt = require("bcryptjs");
-const adminHelpers = require("./helpers/adminHelpers");
 const { authenticateUser } = require("./helpers/authHelpers");
 const cors = require('cors');
 // JWT secret
@@ -23,7 +20,7 @@ app.use("/visitor", visitorRoutes);
 
 // Health/root
 app.get("/", (req, res) => {
-  res.send("✅ API is running. Try /admin/users or /admin/warehouses");
+  res.send("✅ API is running. Try GET /admin/users, GET /visitor/warehouses, GET /visitor/visitor-types");
 });
 
 // Login route
@@ -46,7 +43,7 @@ app.post("/login", async (req, res) => {
 });
 
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
