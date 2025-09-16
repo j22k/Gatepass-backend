@@ -32,6 +32,7 @@ async function requireAuth(req, res, next) {
     }
 
     req.user = user;
+    req.permissions = new Set(user.permissions || []);
     next();
   } catch (err) {
     console.error("Auth error:", err);

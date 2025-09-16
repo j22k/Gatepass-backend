@@ -1,6 +1,7 @@
 const express = require("express");
 const adminRoutes = require("./routes/admin");
 const visitorRoutes = require("./routes/visitor");
+const validation = require("./utils/validation");
 require("dotenv").config();
 const jwt = require("jsonwebtoken");
 const { authenticateUser } = require("./helpers/authHelpers");
@@ -26,11 +27,29 @@ app.get("/", (req, res) => {
 // Login route
 app.post("/login", async (req, res) => {
   const { email, password } = req.body;
-  if (!email || !password) {
-    return res.status(400).json({ error: "Email and password required" });
+  
+  const validationErrors = [];
+  
+  if (!email) validationErrors.push("email is required");
+  if (!password) validationErrors.push("password is required");
+  
+  if (email && !validation.isValidEmail(email)) {
+    validationErrors.push("email must be a valid email address");
   }
+  
+  if (password && typeof password !== 'string') {
+    validationErrors.push("password must be a string");
+  }
+  
+  if (validationErrors.length > 0) {
+    return res.status(400).json({
+      error: "Validation failed",
+      details: validationErrors
+    });
+  }
+  
   try {
-    const user = await authenticateUser(email, password);
+    const user = await authenticateUser(validation.sanitizeString(email).toLowerCase(), password);
     if (!user) {
       return res.status(401).json({ error: "Invalid credentials" });
     }

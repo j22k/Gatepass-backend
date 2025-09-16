@@ -6,7 +6,7 @@ const pool = require("../db/pool");
 async function authenticateUser(email, password) {
   const { rows } = await pool.query(
     `SELECT u.id, u.full_name, u.email, u.phone, u.is_active, u.created_at, u.last_login,
-            u.password_hash, r.name AS role_name, w.id AS warehouse_id, w.name AS warehouse_name
+            u.password_hash, r.name AS role_name, w.id AS warehouse_id, w.name AS warehouse_name, r.id AS role_id
      FROM users u
      JOIN roles r ON r.id = u.role_id
      JOIN warehouses w ON w.id = u.warehouse_id
@@ -19,6 +19,15 @@ async function authenticateUser(email, password) {
   const valid = await bcrypt.compare(password, user.password_hash);
   if (!valid) return null;
 
+  // Load permissions for this user's role
+  const { rows: permRows } = await pool.query(
+    `SELECT p.name FROM permissions p
+     JOIN role_permissions rp ON rp.permission_id = p.id
+     WHERE rp.role_id = $1`,
+    [user.role_id]
+  );
+  user.permissions = permRows.map(r => r.name);
+
   delete user.password_hash;
   return user;
 }
@@ -26,14 +35,25 @@ async function authenticateUser(email, password) {
 async function getUserById(id) {
   const { rows } = await pool.query(
     `SELECT u.id, u.full_name, u.email, u.phone, u.is_active, u.created_at, u.last_login,
-            r.name AS role_name, w.id AS warehouse_id, w.name AS warehouse_name
+            r.name AS role_name, w.id AS warehouse_id, w.name AS warehouse_name, r.id AS role_id
      FROM users u
      JOIN roles r ON r.id = u.role_id
      JOIN warehouses w ON w.id = u.warehouse_id
      WHERE u.id = $1`,
     [id]
   );
-  return rows[0];
+  const user = rows[0];
+  if (!user) return null;
+
+  // Load permissions for this user's role
+  const { rows: permRows } = await pool.query(
+    `SELECT p.name FROM permissions p
+     JOIN role_permissions rp ON rp.permission_id = p.id
+     WHERE rp.role_id = $1`,
+    [user.role_id]
+  );
+  user.permissions = permRows.map(r => r.name);
+  return user;
 }
 
 module.exports = {

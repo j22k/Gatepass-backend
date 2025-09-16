@@ -50,6 +50,21 @@ exports.up = (pgm) => {
       CONSTRAINT visitor_types_name_not_blank CHECK (btrim(name) <> '')
     );
 
+    -- Permissions
+    CREATE TABLE permissions (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      name TEXT UNIQUE NOT NULL,
+      description TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+
+    -- Role-Permissions join table
+    CREATE TABLE role_permissions (
+      role_id UUID REFERENCES roles(id) ON DELETE CASCADE,
+      permission_id UUID REFERENCES permissions(id) ON DELETE CASCADE,
+      PRIMARY KEY (role_id, permission_id)
+    );
+
     -------------------------------------------------------------------------
     -- Seed Data
     -------------------------------------------------------------------------
@@ -71,6 +86,30 @@ exports.up = (pgm) => {
     VALUES ('Auditor', 'Auditor visitor type')
     ON CONFLICT (name) DO NOTHING;
 
+    -- Permissions
+    INSERT INTO permissions (name, description) VALUES
+      ('user.read', 'Read users'),
+      ('user.create', 'Create users'),
+      ('user.update', 'Update users'),
+      ('user.delete', 'Delete users'),
+      ('role.read', 'Read roles'),
+      ('role.create', 'Create roles'),
+      ('role.update', 'Update roles'),
+      ('role.delete', 'Delete roles'),
+      ('warehouse.read', 'Read warehouses'),
+      ('warehouse.create', 'Create warehouses'),
+      ('warehouse.update', 'Update warehouses'),
+      ('warehouse.delete', 'Delete warehouses'),
+      ('visitor_type.read', 'Read visitor types'),
+      ('visitor_type.create', 'Create visitor types'),
+      ('visitor_type.update', 'Update visitor types'),
+      ('visitor_type.delete', 'Delete visitor types'),
+      ('permission.read', 'Read permissions');
+
+    -- Grant all permissions to Admin role
+    INSERT INTO role_permissions (role_id, permission_id)
+    SELECT r.id, p.id FROM roles r, permissions p WHERE r.name = 'Admin';
+
     -------------------------------------------------------------------------
     -- Indexes
     -------------------------------------------------------------------------
@@ -82,6 +121,8 @@ exports.up = (pgm) => {
 
 exports.down = (pgm) => {
   pgm.sql(`
+    DROP TABLE IF EXISTS role_permissions CASCADE;
+    DROP TABLE IF EXISTS permissions CASCADE;
     DROP TABLE IF EXISTS visitor_types CASCADE;
     DROP TABLE IF EXISTS users CASCADE;
     DROP TABLE IF EXISTS warehouses CASCADE;

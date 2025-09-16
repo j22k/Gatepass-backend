@@ -1,5 +1,7 @@
 // middleware/authorize.js
 
+// Permission-checking middleware for endpoints.
+
 function requirePermission(...required) {
   return (req, res, next) => {
     if (!req.permissions) {
