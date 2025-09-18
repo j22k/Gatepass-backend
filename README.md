@@ -1266,7 +1266,264 @@ Authorization: Bearer <jwt_token>
 
 ---
 
-### 7. Visitor Endpoints (Public)
+### 7. Admin - Visit Request Management
+
+#### Get All Visit Requests
+**Endpoint:** `GET /admin/visit-requests`  
+**Description:** Retrieve all visit requests with joined visitor type, warehouse, and approver information  
+**Permission Required:** `visit_request.read`  
+
+**Request Headers:**
+```
+Content-Type: application/json
+Authorization: Bearer <jwt_token>
+```
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Visit requests retrieved successfully",
+  "data": [
+    {
+      "id": "123e4567-e89b-12d3-a456-426614174000",
+      "visitor_name": "John Business Partner",
+      "visitor_email": "john@businesspartner.com",
+      "visitor_phone": "+1234567890",
+      "accompanying_persons": [
+        {
+          "name": "Jane Assistant",
+          "phone": "+1987654321",
+          "email": "jane@businesspartner.com"
+        }
+      ],
+      "visit_date": "2023-12-25",
+      "visit_time": "forenoon",
+      "created_at": "2023-01-01T00:00:00.000Z",
+      "visitor_type_id": "123e4567-e89b-12d3-a456-426614174001",
+      "description": "Quarterly business review meeting",
+      "warehouse_id": "123e4567-e89b-12d3-a456-426614174002",
+      "status": "pending",
+      "updated_at": null,
+      "updated_by": null,
+      "approved_by": null,
+      "approval_time": null,
+      "visitor_type_name": "Business Visitor",
+      "warehouse_name": "Main Warehouse",
+      "approved_by_name": null
+    }
+  ]
+}
+```
+
+**Error Responses:**
+- **401 - Unauthorized:**
+```json
+{
+  "error": "Unauthorized: missing user identity"
+}
+```
+
+- **403 - Forbidden:**
+```json
+{
+  "error": "Forbidden: missing permissions",
+  "missing": ["visit_request.read"]
+}
+```
+
+- **500 - Server Error:**
+```json
+{
+  "error": "Internal server error",
+  "message": "Failed to retrieve visit requests",
+  "timestamp": "2023-01-01T00:00:00.000Z"
+}
+```
+
+**cURL Example:**
+```bash
+curl -X GET http://localhost:5000/admin/visit-requests \
+  -H "Authorization: Bearer <jwt_token>"
+```
+
+#### Get Visit Request by ID
+**Endpoint:** `GET /admin/visit-requests/:id`  
+**Description:** Retrieve a specific visit request by ID with joined data  
+**Permission Required:** `visit_request.read`  
+
+**Request Headers:**
+```
+Content-Type: application/json
+Authorization: Bearer <jwt_token>
+```
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Visit request retrieved successfully",
+  "data": {
+    "id": "123e4567-e89b-12d3-a456-426614174000",
+    "visitor_name": "John Business Partner",
+    "visitor_email": "john@businesspartner.com",
+    "visitor_phone": "+1234567890",
+    "accompanying_persons": [
+      {
+        "name": "Jane Assistant",
+        "phone": "+1987654321",
+        "email": "jane@businesspartner.com"
+      }
+    ],
+    "visit_date": "2023-12-25",
+    "visit_time": "forenoon",
+    "created_at": "2023-01-01T00:00:00.000Z",
+    "visitor_type_id": "123e4567-e89b-12d3-a456-426614174001",
+    "description": "Quarterly business review meeting",
+    "warehouse_id": "123e4567-e89b-12d3-a456-426614174002",
+    "status": "pending",
+    "updated_at": null,
+    "updated_by": null,
+    "approved_by": null,
+    "approval_time": null,
+    "visitor_type_name": "Business Visitor",
+    "warehouse_name": "Main Warehouse",
+    "approved_by_name": null
+  }
+}
+```
+
+**Error Responses:**
+- **400 - Invalid ID:**
+```json
+{
+  "error": "Invalid input",
+  "message": "Invalid visit request ID format",
+  "timestamp": "2023-01-01T00:00:00.000Z"
+}
+```
+
+- **404 - Not Found:**
+```json
+{
+  "error": "Not found",
+  "message": "Visit request not found",
+  "timestamp": "2023-01-01T00:00:00.000Z"
+}
+```
+
+- **500 - Server Error:**
+```json
+{
+  "error": "Internal server error",
+  "message": "Failed to retrieve visit request",
+  "timestamp": "2023-01-01T00:00:00.000Z"
+}
+```
+
+#### Update Visit Request
+**Endpoint:** `PUT /admin/visit-requests/:id`  
+**Description:** Update visit request status (e.g., approve or reject). Requires `visit_request.update` and `visit_request.approve` if status changes to 'approved' or 'rejected'.  
+**Permission Required:** `visit_request.update` (and `visit_request.approve` for approval/rejection)  
+
+**Request Headers:**
+```
+Content-Type: application/json
+Authorization: Bearer <jwt_token>
+```
+
+**Request Body:**
+```json
+{
+  "status": "approved"
+}
+```
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Visit request updated successfully",
+  "data": {
+    "id": "123e4567-e89b-12d3-a456-426614174000",
+    "visitor_name": "John Business Partner",
+    "visitor_email": "john@businesspartner.com",
+    "visitor_phone": "+1234567890",
+    "accompanying_persons": [
+      {
+        "name": "Jane Assistant",
+        "phone": "+1987654321",
+        "email": "jane@businesspartner.com"
+      }
+    ],
+    "visit_date": "2023-12-25",
+    "visit_time": "forenoon",
+    "created_at": "2023-01-01T00:00:00.000Z",
+    "visitor_type_id": "123e4567-e89b-12d3-a456-426614174001",
+    "description": "Quarterly business review meeting",
+    "warehouse_id": "123e4567-e89b-12d3-a456-426614174002",
+    "status": "approved",
+    "updated_at": "2023-01-01T12:00:00.000Z",
+    "updated_by": "123e4567-e89b-12d3-a456-426614174003",
+    "approved_by": "123e4567-e89b-12d3-a456-426614174003",
+    "approval_time": "2023-01-01T12:00:00.000Z",
+    "visitor_type_name": "Business Visitor",
+    "warehouse_name": "Main Warehouse",
+    "approved_by_name": "Admin User"
+  }
+}
+```
+
+**Error Responses:**
+- **400 - Invalid ID:**
+```json
+{
+  "error": "Invalid input",
+  "message": "Invalid visit request ID format",
+  "timestamp": "2023-01-01T00:00:00.000Z"
+}
+```
+
+- **400 - Validation Failed:**
+```json
+{
+  "error": "Validation failed",
+  "details": [
+    "status must be 'pending', 'approved', or 'rejected'"
+  ],
+  "timestamp": "2023-01-01T00:00:00.000Z"
+}
+```
+
+- **403 - Forbidden (Missing Approve Permission):**
+```json
+{
+  "error": "Forbidden: missing permissions",
+  "missing": ["visit_request.approve"]
+}
+```
+
+- **404 - Not Found:**
+```json
+{
+  "error": "Not found",
+  "message": "Visit request not found",
+  "timestamp": "2023-01-01T00:00:00.000Z"
+}
+```
+
+- **500 - Server Error:**
+```json
+{
+  "error": "Internal server error",
+  "message": "Failed to update visit request",
+  "timestamp": "2023-01-01T00:00:00.000Z"
+}
+```
+
+---
+
+### 8. Visitor Endpoints (Public)
 
 #### Get All Warehouses (Public)
 **Endpoint:** `GET /visitor/warehouses`  
@@ -1456,7 +1713,7 @@ curl -X POST http://localhost:5000/visitor/visit-request \
 
 ---
 
-### 8. Health Check
+### 9. Health Check
 
 #### API Status
 **Endpoint:** `GET /`  
@@ -1493,16 +1750,7 @@ curl -X POST http://localhost:5000/visitor/visit-request \
 - Maximum 10 accompanying persons
 - Each accompanying person must have a valid name
 - Phone and email are optional for accompanying persons
-
-### Business Rules
-- User emails must be unique
-- Role names must be unique
-- Warehouse names must be unique
-- Visitor type names must be unique
-- Users cannot be deleted if they created records
-- Roles cannot be deleted if assigned to users
-
----
+- Status can be updated to 'pending', 'approved', or 'rejected' by authorized users
 
 ## Error Codes
 

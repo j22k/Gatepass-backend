@@ -357,6 +357,84 @@ const adminHelpers = {
     const query = "SELECT id, name, description, created_at FROM permissions ORDER BY name ASC";
     const { rows } = await pool.query(query);
     return rows;
+  },
+
+  // -------------------- Visit Request Management --------------------
+
+  /**
+   * Retrieves all visit requests with joined data for admin view
+   * @returns {Promise<Array>} - Array of visit request objects with joined names
+   */
+  async getAllVisitRequests() {
+    const query = `
+      SELECT 
+        vr.id, vr.visitor_name, vr.visitor_email, vr.visitor_phone, 
+        vr.accompanying_persons, vr.visit_date, vr.visit_time, 
+        vr.created_at, vr.visitor_type_id, vr.description, vr.warehouse_id, 
+        vr.status, vr.updated_at, vr.updated_by, vr.approved_by, vr.approval_time,
+        vt.name AS visitor_type_name, w.name AS warehouse_name, 
+        u.full_name AS approved_by_name
+      FROM visit_requests vr
+      JOIN visitor_types vt ON vt.id = vr.visitor_type_id
+      JOIN warehouses w ON w.id = vr.warehouse_id
+      LEFT JOIN users u ON u.id = vr.approved_by
+      ORDER BY vr.created_at DESC
+    `;
+    const { rows } = await pool.query(query);
+    return rows;
+  },
+
+  /**
+   * Retrieves a specific visit request by ID with joined data
+   * @param {string} id - Visit request UUID
+   * @returns {Promise<Object|null>} - Visit request object or null if not found
+   */
+  async getVisitRequestById(id) {
+    const query = `
+      SELECT 
+        vr.id, vr.visitor_name, vr.visitor_email, vr.visitor_phone, 
+        vr.accompanying_persons, vr.visit_date, vr.visit_time, 
+        vr.created_at, vr.visitor_type_id, vr.description, vr.warehouse_id, 
+        vr.status, vr.updated_at, vr.updated_by, vr.approved_by, vr.approval_time,
+        vt.name AS visitor_type_name, w.name AS warehouse_name, 
+        u.full_name AS approved_by_name
+      FROM visit_requests vr
+      JOIN visitor_types vt ON vt.id = vr.visitor_type_id
+      JOIN warehouses w ON w.id = vr.warehouse_id
+      LEFT JOIN users u ON u.id = vr.approved_by
+      WHERE vr.id = $1
+    `;
+    const { rows } = await pool.query(query, [id]);
+    return rows[0] || null;
+  },
+
+  /**
+   * Updates a visit request (primarily for status changes like approval/rejection)
+   * @param {string} id - Visit request UUID
+   * @param {Object} updateData - Data to update (status, updated_by)
+   * @returns {Promise<Object|null>} - Updated visit request object or null if not found
+   */
+  async updateVisitRequest(id, { status, updated_by }) {
+    let query = `
+      UPDATE visit_requests
+      SET 
+        status = COALESCE($1, status),
+        updated_at = now(),
+        updated_by = $2
+    `;
+    const values = [status, updated_by];
+    
+    // If approving/rejecting, set approval fields
+    if (status === 'approved' || status === 'rejected') {
+      query += `, approved_by = $3, approval_time = now()`;
+      values.push(updated_by);
+    }
+    
+    query += ` WHERE id = $${values.length + 1} RETURNING *`;
+    values.push(id);
+    
+    const { rows } = await pool.query(query, values);
+    return rows[0] || null;
   }
 };
 
