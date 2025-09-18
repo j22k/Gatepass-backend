@@ -31,10 +31,15 @@ router.get("/visitor-types", async (req, res) => {
     const types = await visitorHelper.getAllVisitorTypes();
     res.status(200).json({ success: true, message: "Visitor types retrieved successfully", data: types });
   } catch (err) {
-    console.error("Error fetching visitor types:", err.message);
+    console.error("Error fetching visitor types:", err.message, "Code:", err.code);
+    // Handle DB schema errors (e.g., missing 'name' column)
+    if (err.code === '42703') {
+      return res.status(500).json({ error: "Database schema error", message: "Column 'name' does not exist. Run migrations to fix." });
+    }
     res.status(500).json({ 
       error: "Internal server error",
-      message: "Failed to retrieve visitor types"
+      message: err.message || "Failed to retrieve visitor types",
+      code: err.code
     });
   }
 });

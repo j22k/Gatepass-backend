@@ -116,8 +116,12 @@ router.get("/visitor-types", requireAuth, requirePermission("visitor_type.read")
     const types = await adminHelpers.getAllVisitorTypes();
     res.json({ success: true, message: "Visitor types retrieved successfully", data: types });
   } catch (err) {
-    console.error("Error fetching visitor types:", err);
-    res.status(500).json({ error: "Internal server error", message: "Failed to retrieve visitor types" });
+    console.error("Error fetching visitor types:", err.message, "Code:", err.code);
+    // Handle DB schema errors (e.g., missing 'name' column)
+    if (err.code === '42703') {
+      return res.status(500).json({ error: "Database schema error", message: "Column 'name' does not exist. Run migrations to fix." });
+    }
+    res.status(500).json({ error: "Internal server error", message: err.message || "Failed to retrieve visitor types", code: err.code });
   }
 });
 
@@ -397,6 +401,9 @@ router.delete("/roles/:id", requireAuth, requirePermission("role.delete"), async
     res.json({ success: true, message: "Role deleted successfully" });
   } catch (err) {
     console.error("Error deleting role:", err);
+    if (err.code === '23503') {
+      return res.status(400).json({ error: "Invalid reference", message: "Cannot delete role: it is referenced by existing users" });
+    }
     res.status(500).json({ error: "Internal server error", message: "Failed to delete role" });
   }
 });
