@@ -1,0 +1,44 @@
+# Node modules
+node_modules/
+
+# Logs
+*.log
+
+# Runtime data
+lib-cov
+coverage
+.nyc_output
+.grunt
+bower_components
+
+# Build / dist
+dist/
+build/
+
+# Environment files
+.env
+.env.test
+.env.local
+.env.development.local
+.env.production.local
+
+# Database stuff
+*.sqlite
+*.sqlite-journal
+pgdata/
+
+# IDE/editor configs
+.vscode/
+.idea/
+*.swp
+*.swo
+*.bak
+.DS_Store
+Thumbs.db
+
+# OS-specific
+*.iml
+*.class
+
+# TypeScript (if later added)
+*.tsbuildinfo
