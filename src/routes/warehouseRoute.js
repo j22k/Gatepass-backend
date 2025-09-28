@@ -1,5 +1,5 @@
 const express = require('express');
-const { authenticateToken } = require('../middlewares/auth');
+const { authenticateToken , authorizeRoles} = require('../middlewares/auth');
 const warehouseController = require('../controllers/warehouseController');
 
 const router = express.Router();
@@ -11,12 +11,12 @@ router.get('/getall', warehouseController.getAllWarehouses);
 router.get('/:id', authenticateToken, warehouseController.getWarehouseById);
 
 // create a new warehouse req.body: { name, location }
-router.post('/create', authenticateToken, warehouseController.createWarehouse);
+router.post('/create', authenticateToken,authorizeRoles('Admin'), warehouseController.createWarehouse);
 
 // update a warehouse req.body: { name, location }
-router.put('/:id', authenticateToken, warehouseController.updateWarehouse);
+router.put('/:id', authenticateToken,authorizeRoles('Admin'), warehouseController.updateWarehouse);
 
 // delete a warehouse
-router.delete('/:id', authenticateToken, warehouseController.deleteWarehouse);
+router.delete('/:id', authenticateToken,authorizeRoles('Admin'), warehouseController.deleteWarehouse);
 
 module.exports = router;

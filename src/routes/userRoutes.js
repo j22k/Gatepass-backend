@@ -1,5 +1,5 @@
 const express = require('express');
-const { authenticateToken } = require('../middlewares/auth');
+const { authenticateToken , authorizeRoles} = require('../middlewares/auth');
 const userController = require('../controllers/userController');
 
 const router = express.Router();
@@ -11,12 +11,12 @@ router.get('/getall', authenticateToken, userController.getAllUsers);
 router.get('/:id', authenticateToken, userController.getUserById);
 
 // create a new user req.body: { name, email, phone, password, designation, role, warehouseId }
-router.post('/create', authenticateToken, userController.createUser);
+router.post('/create', authenticateToken, authorizeRoles('Admin'),userController.createUser);
 
 // update a user req.body: { name, email, phone, password, designation, role, warehouseId, isActive }
-router.put('/:id', authenticateToken, userController.updateUser);
+router.put('/:id', authenticateToken,authorizeRoles('Admin'), userController.updateUser);
 
 // delete a user
-router.delete('/:id', authenticateToken, userController.deleteUser);
+router.delete('/:id', authenticateToken,authorizeRoles('Admin'), userController.deleteUser);
 
 module.exports = router;

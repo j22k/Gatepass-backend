@@ -1,5 +1,5 @@
 const express = require('express');
-const { authenticateToken } = require('../middlewares/auth');
+const { authenticateToken , authorizeRoles} = require('../middlewares/auth');
 const visitorController = require('../controllers/visitorController');
 const warehouseController = require('../controllers/warehouseController');
 const warehouseTimeSlotController = require('../controllers/warehouseTimeSlotController');

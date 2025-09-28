@@ -1,5 +1,5 @@
 const express = require('express');
-const { authenticateToken } = require('../middlewares/auth');
+const { authenticateToken, authorizeRoles} = require('../middlewares/auth');
 const warehouseTimeSlotController = require('../controllers/warehouseTimeSlotController');
 
 const router = express.Router();
@@ -15,12 +15,12 @@ router.get('/:warehouseId', warehouseTimeSlotController.getWarehouseTimeSlotsByW
 router.get('/:id', authenticateToken, warehouseTimeSlotController.getWarehouseTimeSlotsByWarehouseId);
 
 // create a new warehouse time slot req.body: { name, from, to, warehouseId }
-router.post('/create', authenticateToken, warehouseTimeSlotController.createWarehouseTimeSlot);
+router.post('/create', authenticateToken,authorizeRoles('Admin'), warehouseTimeSlotController.createWarehouseTimeSlot);
 
 // update a warehouse time slot req.body: { name, from, to, warehouseId }
-router.put('/:id', authenticateToken, warehouseTimeSlotController.updateWarehouseTimeSlot);
+router.put('/:id', authenticateToken,authorizeRoles('Admin'), warehouseTimeSlotController.updateWarehouseTimeSlot);
 
 // delete a warehouse time slot
-router.delete('/:id', authenticateToken, warehouseTimeSlotController.deleteWarehouseTimeSlot);
+router.delete('/:id', authenticateToken,authorizeRoles('Admin'), warehouseTimeSlotController.deleteWarehouseTimeSlot);
 
 module.exports = router;

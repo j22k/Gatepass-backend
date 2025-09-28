@@ -84,7 +84,8 @@ const visitorController = {
   async createVisitorRequest(req, res) {
     try {
       const { name, phone, email, visitorTypeId, warehouseId, warehouseTimeSlotId, accompanying, date } = req.body;
-
+      console.log('req.body:', req.body);
+      
       // Validate foreign keys
       const [visitorTypeExists] = await db.select().from(visitorTypes).where(eq(visitorTypes.id, visitorTypeId)).limit(1);
       if (!visitorTypeExists) {

@@ -1,5 +1,5 @@
 const express = require('express');
-const { authenticateToken } = require('../middlewares/auth');
+const { authenticateToken , authorizeRoles} = require('../middlewares/auth');
 const visitortypeController = require('../controllers/visitortypeController');
 
 const router = express.Router();
@@ -11,12 +11,12 @@ router.get('/getall', visitortypeController.getAllVisitorTypes);
 router.get('/:id', authenticateToken, visitortypeController.getVisitorTypeById);
 
 // create a new visitor type req.body: { name }
-router.post('/create', authenticateToken, visitortypeController.createVisitorType);
+router.post('/create', authenticateToken,authorizeRoles('Admin'), visitortypeController.createVisitorType);
 
 // update a visitor type req.body: { name }
-router.put('/:id', authenticateToken, visitortypeController.updateVisitorType);
+router.put('/:id', authenticateToken, authorizeRoles('Admin'),visitortypeController.updateVisitorType);
 
 // delete a visitor type
-router.delete('/:id', authenticateToken, visitortypeController.deleteVisitorType);
+router.delete('/:id', authenticateToken,authorizeRoles('Admin'), visitortypeController.deleteVisitorType);
 
 module.exports = router;
