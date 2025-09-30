@@ -1,6 +1,6 @@
 const db = require('../config/database');
-const { warehouseTimeSlots, warehouse, warehouseWorkflow, visitorTypes, users } = require('../schema');
-const { eq, and, not } = require('drizzle-orm');  // ✅ added and, not
+const { warehouseTimeSlots, warehouse, warehouseWorkflow, visitorTypes, users, approval, visitorRequest } = require('../schema');
+const { eq, and, not, inArray } = require('drizzle-orm');  // ✅ added inArray for subquery
 const { validateUuid } = require('../utils/uuidValidator');
 
 const warehouseworkflowController = {
@@ -171,6 +171,27 @@ const warehouseworkflowController = {
             const existing = await db.select().from(warehouseWorkflow).where(eq(warehouseWorkflow.id, id));
             if (existing.length === 0) {
                 return res.status(404).json({ error: 'Workflow entry not found' });
+            }
+
+            const { warehouseId, visitorTypeId, stepNo, approver } = existing[0];
+
+            // Delete matching approvals before deleting the workflow
+            const relevantRequestIds = await db
+                .select({ id: visitorRequest.id })
+                .from(visitorRequest)
+                .where(and(
+                    eq(visitorRequest.warehouseId, warehouseId),
+                    eq(visitorRequest.visitorTypeId, visitorTypeId)
+                ));
+
+            if (relevantRequestIds.length > 0) {
+                await db
+                    .delete(approval)
+                    .where(and(
+                        inArray(approval.visitorRequestId, relevantRequestIds.map(r => r.id)),
+                        eq(approval.stepNo, stepNo),
+                        eq(approval.approver, approver)
+                    ));
             }
 
             await db.delete(warehouseWorkflow).where(eq(warehouseWorkflow.id, id));

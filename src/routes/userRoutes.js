@@ -19,4 +19,7 @@ router.put('/:id', authenticateToken, userController.updateUser);
 // delete a user
 router.delete('/:id', authenticateToken, userController.deleteUser);
 
+// get users by warehouse id
+router.get('/warehouse/:warehouseId', authenticateToken, userController.getUsersByWarehouseId);
+
 module.exports = router;

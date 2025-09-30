@@ -1,6 +1,6 @@
 const bcrypt = require('bcrypt');
 const db = require('../config/database');
-const { users, warehouse } = require('../schema');
+const { users, warehouse, warehouseWorkflow, approval } = require('../schema');
 const { eq, and } = require('drizzle-orm');
 const { validateUuid } = require('../utils/uuidValidator'); // Import the validator
 
@@ -68,6 +68,19 @@ const userController = {
   async createUser(req, res) {
     try {
       const { name, email, phone, password, designation, role, warehouseId } = req.body;
+      console.log('req.body:', req.body);
+      
+      // Validate warehouseId if provided
+      if (warehouseId) {
+        if (!validateUuid(warehouseId)) {
+          return res.status(400).json({ success: false, message: 'Invalid warehouse ID format' });
+        }
+        const [warehouseExists] = await db.select().from(warehouse).where(eq(warehouse.id, warehouseId)).limit(1);
+        if (!warehouseExists) {
+          return res.status(400).json({ success: false, message: 'Invalid warehouse ID' });
+        }
+      }
+      
       const hashedPassword = await bcrypt.hash(password, 10);
 
       const result = await db
@@ -107,6 +120,17 @@ const userController = {
       }
       const { name, email, phone, password, designation, role, warehouseId, isActive } = req.body;
 
+      // Validate warehouseId if provided
+      if (warehouseId) {
+        if (!validateUuid(warehouseId)) {
+          return res.status(400).json({ success: false, message: 'Invalid warehouse ID format' });
+        }
+        const [warehouseExists] = await db.select().from(warehouse).where(eq(warehouse.id, warehouseId)).limit(1);
+        if (!warehouseExists) {
+          return res.status(400).json({ success: false, message: 'Invalid warehouse ID' });
+        }
+      }
+
       const updateData = { name, email, phone, designation, role, warehouseId, isActive };
       if (password) {
         updateData.password = await bcrypt.hash(password, 10);
@@ -136,6 +160,19 @@ const userController = {
       if (!validateUuid(id)) { // Validate ID format
         return res.status(400).json({ success: false, message: 'Invalid ID format' });
       }
+      
+      // Check if user is referenced in warehouse_workflow as approver
+      const workflowRefs = await db.select().from(warehouseWorkflow).where(eq(warehouseWorkflow.approver, id)).limit(1);
+      if (workflowRefs.length > 0) {
+        return res.status(400).json({ success: false, message: 'Cannot delete user: User is assigned as an approver in warehouse workflows' });
+      }
+      
+      // Check if user is referenced in approval as approver
+      const approvalRefs = await db.select().from(approval).where(eq(approval.approver, id)).limit(1);
+      if (approvalRefs.length > 0) {
+        return res.status(400).json({ success: false, message: 'Cannot delete user: User is assigned as an approver in pending approvals' });
+      }
+      
       const result = await db.delete(users).where(eq(users.id, id)).returning();
 
       if (result.length === 0) {
@@ -147,7 +184,42 @@ const userController = {
       console.error('Delete user error:', error);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
-  }
+  },
+
+  // Get users by warehouse ID
+  async getUsersByWarehouseId(req, res) {
+    try {
+      const { warehouseId } = req.params;
+      if (!validateUuid(warehouseId)) {
+        return res.status(400).json({ success: false, message: 'Invalid warehouse ID format' });
+      }
+      // Check if warehouse exists
+      const [warehouseExists] = await db.select().from(warehouse).where(eq(warehouse.id, warehouseId)).limit(1);
+      if (!warehouseExists) {
+        return res.status(404).json({ success: false, message: 'Warehouse not found' });
+      }
+      const result = await db
+        .select({
+          id: users.id,
+          name: users.name,
+          email: users.email,
+          phone: users.phone,
+          designation: users.designation,
+          role: users.role,
+          warehouseName: warehouse.name,
+          isActive: users.isActive,
+        })
+        .from(users)
+        .leftJoin(warehouse, eq(users.warehouseId, warehouse.id))
+        .where(eq(users.warehouseId, warehouseId))
+        .orderBy(users.name);
+
+      res.json({ success: true, data: result });
+    } catch (error) {
+      console.error('Get users by warehouse ID error:', error);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  },
 };
 
 module.exports = userController;

@@ -6,7 +6,9 @@ exports.up = (pgm) => {
     CREATE TABLE warehouse (
       id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
       name VARCHAR(100) NOT NULL UNIQUE,
-      location TEXT
+      location TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
 
     CREATE TABLE warehouse_time_slots (
@@ -14,13 +16,17 @@ exports.up = (pgm) => {
       name VARCHAR(100) NOT NULL,
       "from" TIME NOT NULL,
       "to" TIME NOT NULL,
-      warehouse_id UUID NOT NULL REFERENCES warehouse(id) ON DELETE CASCADE
+      warehouse_id UUID NOT NULL REFERENCES warehouse(id) ON DELETE CASCADE,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
 
     CREATE TABLE visitor_types (
       id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
       name VARCHAR(100) NOT NULL UNIQUE,
-      description TEXT
+      description TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
 
     CREATE TYPE user_role AS ENUM ('Admin', 'Receptionist', 'Approver');
@@ -34,7 +40,9 @@ exports.up = (pgm) => {
       designation VARCHAR(100),  -- New column for department-like info
       role user_role NOT NULL,   -- New enum column for roles
       warehouse_id UUID REFERENCES warehouse(id) ON DELETE SET NULL,
-      is_active BOOLEAN DEFAULT TRUE
+      is_active BOOLEAN DEFAULT TRUE,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
 
     CREATE TABLE visitor_request (
@@ -47,7 +55,10 @@ exports.up = (pgm) => {
       warehouse_time_slot_id UUID NOT NULL REFERENCES warehouse_time_slots(id),
       accompanying JSONB DEFAULT '[]',
       date DATE NOT NULL CHECK (date >= CURRENT_DATE),
-      status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending','approved'))
+      status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
+      tracking_code VARCHAR(8) UNIQUE,  -- New column for short tracking code
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
 
     CREATE TABLE warehouse_workflow (
@@ -56,6 +67,8 @@ exports.up = (pgm) => {
       visitor_type_id UUID NOT NULL REFERENCES visitor_types(id),
       step_no INT NOT NULL,
       approver UUID NOT NULL REFERENCES users(id),
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       UNIQUE (warehouse_id, visitor_type_id, step_no)
     );
 
@@ -64,7 +77,9 @@ exports.up = (pgm) => {
       visitor_request_id UUID NOT NULL REFERENCES visitor_request(id) ON DELETE CASCADE,
       step_no INT NOT NULL,
       approver UUID NOT NULL REFERENCES users(id),
-      status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected'))
+      status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
 
     CREATE OR REPLACE FUNCTION insert_approvals_for_request()
@@ -84,6 +99,22 @@ exports.up = (pgm) => {
     AFTER INSERT ON visitor_request
     FOR EACH ROW
     EXECUTE FUNCTION insert_approvals_for_request();
+
+    CREATE OR REPLACE FUNCTION update_updated_at_column()
+    RETURNS TRIGGER AS $$
+    BEGIN
+      NEW.updated_at = CURRENT_TIMESTAMP;
+      RETURN NEW;
+    END;
+    $$ LANGUAGE plpgsql;
+
+    CREATE TRIGGER update_warehouse_updated_at BEFORE UPDATE ON warehouse FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+    CREATE TRIGGER update_warehouse_time_slots_updated_at BEFORE UPDATE ON warehouse_time_slots FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+    CREATE TRIGGER update_visitor_types_updated_at BEFORE UPDATE ON visitor_types FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+    CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+    CREATE TRIGGER update_visitor_request_updated_at BEFORE UPDATE ON visitor_request FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+    CREATE TRIGGER update_warehouse_workflow_updated_at BEFORE UPDATE ON warehouse_workflow FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+    CREATE TRIGGER update_approval_updated_at BEFORE UPDATE ON approval FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
   `);
 };
 
@@ -91,6 +122,14 @@ exports.down = (pgm) => {
   pgm.sql(`
     DROP TRIGGER IF EXISTS trg_insert_approvals ON visitor_request;
     DROP FUNCTION IF EXISTS insert_approvals_for_request();
+    DROP FUNCTION IF EXISTS update_updated_at_column();
+    DROP TRIGGER IF EXISTS update_warehouse_updated_at ON warehouse;
+    DROP TRIGGER IF EXISTS update_warehouse_time_slots_updated_at ON warehouse_time_slots;
+    DROP TRIGGER IF EXISTS update_visitor_types_updated_at ON visitor_types;
+    DROP TRIGGER IF EXISTS update_users_updated_at ON users;
+    DROP TRIGGER IF EXISTS update_visitor_request_updated_at ON visitor_request;
+    DROP TRIGGER IF EXISTS update_warehouse_workflow_updated_at ON warehouse_workflow;
+    DROP TRIGGER IF EXISTS update_approval_updated_at ON approval;
     DROP TABLE IF EXISTS approval CASCADE;
     DROP TABLE IF EXISTS warehouse_workflow CASCADE;
     DROP TABLE IF EXISTS visitor_request CASCADE;

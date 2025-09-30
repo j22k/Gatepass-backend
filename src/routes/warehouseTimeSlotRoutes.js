@@ -10,16 +10,16 @@ router.get('/getall', authenticateToken, warehouseTimeSlotController.getAllWareh
 // get all warehouse time slots by warehouse id (explicit)
 router.get('/:warehouseId', warehouseTimeSlotController.getWarehouseTimeSlotsByWarehouseId);
 
-
-// backward compatibility: treat '/:id' as a warehouseId to match current frontend usage
-router.get('/:id', authenticateToken, warehouseTimeSlotController.getWarehouseTimeSlotsByWarehouseId);
-
-// create a new warehouse time slot req.body: { name, from, to, warehouseId }
-router.post('/create', authenticateToken, warehouseTimeSlotController.createWarehouseTimeSlot);
+// create a new warehouse time slot by warehouse ID req.body: { name, from, to }
+router.post('/warehouse/:warehouseId', authenticateToken, warehouseTimeSlotController.createWarehouseTimeSlotByWarehouseId);
 
 // update a warehouse time slot req.body: { name, from, to, warehouseId }
 router.put('/:id', authenticateToken, warehouseTimeSlotController.updateWarehouseTimeSlot);
 
+// delete a warehouse time slot
+router.delete('/:id', authenticateToken, warehouseTimeSlotController.deleteWarehouseTimeSlot);
+
+module.exports = router;
 // delete a warehouse time slot
 router.delete('/:id', authenticateToken, warehouseTimeSlotController.deleteWarehouseTimeSlot);
 
