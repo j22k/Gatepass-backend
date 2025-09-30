@@ -7,6 +7,7 @@ exports.up = (pgm) => {
       id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
       name VARCHAR(100) NOT NULL UNIQUE,
       location TEXT,
+      is_active BOOLEAN DEFAULT TRUE,  -- Added for soft deletes
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
@@ -17,6 +18,7 @@ exports.up = (pgm) => {
       "from" TIME NOT NULL,
       "to" TIME NOT NULL,
       warehouse_id UUID NOT NULL REFERENCES warehouse(id) ON DELETE CASCADE,
+      is_active BOOLEAN DEFAULT TRUE,  -- Added for soft deletes
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
@@ -25,6 +27,7 @@ exports.up = (pgm) => {
       id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
       name VARCHAR(100) NOT NULL UNIQUE,
       description TEXT,
+      is_active BOOLEAN DEFAULT TRUE,  -- Added for soft deletes
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );

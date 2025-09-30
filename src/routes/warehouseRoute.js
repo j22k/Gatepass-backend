@@ -16,7 +16,13 @@ router.post('/create', authenticateToken, warehouseController.createWarehouse);
 // update a warehouse req.body: { name, location }
 router.put('/:id', authenticateToken, warehouseController.updateWarehouse);
 
-// delete a warehouse
-router.delete('/:id', authenticateToken, warehouseController.deleteWarehouse);
+// disable a warehouse
+router.put('/:id/disable', authenticateToken, warehouseController.disableWarehouse);
+
+// enable a warehouse
+router.put('/:id/enable', authenticateToken, warehouseController.enableWarehouse);
+
+// get all disabled warehouses
+router.get('/getall/disabled', authenticateToken, warehouseController.getAllDisabledWarehouses);
 
 module.exports = router;

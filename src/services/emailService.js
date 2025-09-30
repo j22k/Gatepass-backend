@@ -1,23 +1,31 @@
 const nodemailer = require('nodemailer');
 
-// Debug: Log environment variables
-console.log('SMTP_HOST:', process.env.SMTP_HOST);
-console.log('SMTP_PORT:', process.env.SMTP_PORT);
-console.log('SMTP_SECURE:', process.env.SMTP_SECURE);
-
 // Create transporter with SMTP settings from environment variables
+// Note: In production, ensure SMTP credentials are securely stored and rotated.
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
-  port: process.env.SMTP_PORT || 465,  // Changed to 465 for Gmail SSL
-  secure: process.env.SMTP_SECURE === 'true' || true,  // Force true for Gmail SSL
+  port: parseInt(process.env.SMTP_PORT, 10) || 465,
+  secure: process.env.SMTP_SECURE === 'true',
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
   },
-  debug: true,  // Enable debug logging
+  // Remove debug in production; enable only for development
+  // debug: process.env.NODE_ENV === 'development',
 });
 
 // Email templates
+/**
+ * Generates HTML template for approval email.
+ * @param {string} visitorName - Name of the visitor.
+ * @param {string} trackingCode - Unique tracking code.
+ * @param {string} warehouseName - Name of the warehouse.
+ * @param {string} timeSlotName - Name of the time slot.
+ * @param {string} date - Visit date.
+ * @param {string} fromTime - Start time.
+ * @param {string} toTime - End time.
+ * @returns {string} HTML email content.
+ */
 const getApprovalTemplate = (visitorName, trackingCode, warehouseName, timeSlotName, date, fromTime, toTime) => `
   <html>
     <head>
@@ -52,6 +60,13 @@ const getApprovalTemplate = (visitorName, trackingCode, warehouseName, timeSlotN
   </html>
 `;
 
+/**
+ * Generates HTML template for rejection email.
+ * @param {string} visitorName - Name of the visitor.
+ * @param {string} trackingCode - Unique tracking code.
+ * @param {string} reason - Reason for rejection.
+ * @returns {string} HTML email content.
+ */
 const getRejectionTemplate = (visitorName, trackingCode, reason = 'No specific reason provided') => `
   <html>
     <head>
@@ -82,9 +97,18 @@ const getRejectionTemplate = (visitorName, trackingCode, reason = 'No specific r
   </html>
 `;
 
-// Send email function
+/**
+ * Sends an email asynchronously.
+ * @param {string} to - Recipient email.
+ * @param {string} subject - Email subject.
+ * @param {string} html - HTML content.
+ * @returns {Promise<void>} Resolves when email is sent or logs error.
+ */
 const sendEmail = async (to, subject, html) => {
   try {
+    if (!to || !subject || !html) {
+      throw new Error('Missing required email parameters');
+    }
     const mailOptions = {
       from: process.env.SMTP_FROM || 'noreply@gatepass.com',
       to,
@@ -92,20 +116,41 @@ const sendEmail = async (to, subject, html) => {
       html,
     };
     await transporter.sendMail(mailOptions);
-    console.log(`Email sent to ${to}`);
+    // Log success only in development
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`Email sent to ${to}`);
+    }
   } catch (error) {
-    console.error('Email sending failed:', error);
-    // Note: Do not throw error to avoid blocking API response
+    // Log error without exposing sensitive info
+    console.error('Email sending failed:', error.message);
+    // Do not throw to avoid blocking API response
   }
 };
 
-// Specific functions for approval/rejection
+/**
+ * Sends approval email to visitor.
+ * @param {string} visitorEmail - Visitor's email.
+ * @param {string} visitorName - Visitor's name.
+ * @param {string} trackingCode - Tracking code.
+ * @param {string} warehouseName - Warehouse name.
+ * @param {string} timeSlotName - Time slot name.
+ * @param {string} date - Visit date.
+ * @param {string} fromTime - Start time.
+ * @param {string} toTime - End time.
+ */
 const sendApprovalEmail = async (visitorEmail, visitorName, trackingCode, warehouseName, timeSlotName, date, fromTime, toTime) => {
   const subject = 'Your Visitor Request Has Been Approved';
   const html = getApprovalTemplate(visitorName, trackingCode, warehouseName, timeSlotName, date, fromTime, toTime);
   await sendEmail(visitorEmail, subject, html);
 };
 
+/**
+ * Sends rejection email to visitor.
+ * @param {string} visitorEmail - Visitor's email.
+ * @param {string} visitorName - Visitor's name.
+ * @param {string} trackingCode - Tracking code.
+ * @param {string} reason - Rejection reason.
+ */
 const sendRejectionEmail = async (visitorEmail, visitorName, trackingCode, reason) => {
   const subject = 'Your Visitor Request Has Been Rejected';
   const html = getRejectionTemplate(visitorName, trackingCode, reason);

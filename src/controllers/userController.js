@@ -50,7 +50,7 @@ const userController = {
         })
         .from(users)
         .leftJoin(warehouse, eq(users.warehouseId, warehouse.id))
-        .where(eq(users.id, id))
+        .where(eq(users.id, id), eq(users.isActive, true))  // Filter active only
         .limit(1);
 
       if (result.length === 0) {
@@ -93,6 +93,7 @@ const userController = {
           designation,
           role,
           warehouseId,
+          isActive: true, // Set isActive to true by default
         })
         .returning({
           id: users.id,
@@ -118,7 +119,7 @@ const userController = {
       if (!validateUuid(id)) { // Validate ID format
         return res.status(400).json({ success: false, message: 'Invalid ID format' });
       }
-      const { name, email, phone, password, designation, role, warehouseId, isActive } = req.body;
+      const { name, email, phone, password, designation, role, warehouseId, isActive } = req.body;  // Allow updating isActive
 
       // Validate warehouseId if provided
       if (warehouseId) {
@@ -131,7 +132,7 @@ const userController = {
         }
       }
 
-      const updateData = { name, email, phone, designation, role, warehouseId, isActive };
+      const updateData = { name, email, phone, designation, role, warehouseId, isActive };  // Include isActive
       if (password) {
         updateData.password = await bcrypt.hash(password, 10);
       }
@@ -153,8 +154,8 @@ const userController = {
     }
   },
 
-  // Delete a user
-  async deleteUser(req, res) {
+  // Delete a user (soft delete)
+  async disableUser(req, res) {
     try {
       const { id } = req.params;
       if (!validateUuid(id)) { // Validate ID format
@@ -164,16 +165,23 @@ const userController = {
       // Check if user is referenced in warehouse_workflow as approver
       const workflowRefs = await db.select().from(warehouseWorkflow).where(eq(warehouseWorkflow.approver, id)).limit(1);
       if (workflowRefs.length > 0) {
-        return res.status(400).json({ success: false, message: 'Cannot delete user: User is assigned as an approver in warehouse workflows' });
+        return res.status(400).json({ success: false, message: 'Cannot disable user: User is assigned as an approver in warehouse workflows' });
       }
       
       // Check if user is referenced in approval as approver
       const approvalRefs = await db.select().from(approval).where(eq(approval.approver, id)).limit(1);
       if (approvalRefs.length > 0) {
-        return res.status(400).json({ success: false, message: 'Cannot delete user: User is assigned as an approver in pending approvals' });
+        return res.status(400).json({ success: false, message: 'Cannot disable user: User is assigned as an approver in pending approvals' });
       }
       
-      const result = await db.delete(users).where(eq(users.id, id)).returning();
+      // Delete pending approvals for this user to prevent workflow blockage
+      await db.delete(approval).where(and(eq(approval.approver, id), eq(approval.status, 'pending')));
+      
+      const result = await db
+        .update(users)
+        .set({ isActive: false })  // Soft delete: disable instead of delete
+        .where(eq(users.id, id))
+        .returning();
 
       if (result.length === 0) {
         return res.status(404).json({ success: false, message: 'User not found' });
@@ -181,7 +189,31 @@ const userController = {
 
       res.json({ success: true, data: result[0] });
     } catch (error) {
-      console.error('Delete user error:', error);
+      console.error('Disable user error:', error);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  },
+
+  // Enable a user
+  async enableUser(req, res) {
+    try {
+      const { id } = req.params;
+      if (!validateUuid(id)) {
+        return res.status(400).json({ success: false, message: 'Invalid ID format' });
+      }
+      const result = await db
+        .update(users)
+        .set({ isActive: true })
+        .where(eq(users.id, id))
+        .returning();
+
+      if (result.length === 0) {
+        return res.status(404).json({ success: false, message: 'User not found' });
+      }
+
+      res.json({ success: true, data: result[0] });
+    } catch (error) {
+      console.error('Enable user error:', error);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   },
@@ -211,7 +243,7 @@ const userController = {
         })
         .from(users)
         .leftJoin(warehouse, eq(users.warehouseId, warehouse.id))
-        .where(eq(users.warehouseId, warehouseId))
+        .where(eq(users.warehouseId, warehouseId), eq(users.isActive, true)) // Filter active only
         .orderBy(users.name);
 
       res.json({ success: true, data: result });

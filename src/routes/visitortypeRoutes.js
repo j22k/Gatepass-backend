@@ -16,7 +16,13 @@ router.post('/create', authenticateToken, visitortypeController.createVisitorTyp
 // update a visitor type req.body: { name }
 router.put('/:id', authenticateToken, visitortypeController.updateVisitorType);
 
-// delete a visitor type
-router.delete('/:id', authenticateToken, visitortypeController.deleteVisitorType);
+// disable a visitor type
+router.put('/:id/disable', authenticateToken, visitortypeController.disableVisitorType);
+
+// enable a visitor type
+router.put('/:id/enable', authenticateToken, visitortypeController.enableVisitorType);
+
+// get all disabled visitor types
+router.get('/getall/disabled', authenticateToken, visitortypeController.getAllDisabledVisitorTypes);
 
 module.exports = router;

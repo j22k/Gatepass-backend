@@ -7,6 +7,7 @@ const warehouse = pgTable('warehouse', {
   id: uuid('id').primaryKey().default(sql`uuid_generate_v4()`),
   name: varchar('name', { length: 100 }).notNull().unique(),
   location: text('location'),
+  isActive: boolean('is_active').default(true),  // New column for soft deletes
   createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
   updatedAt: timestamp('updated_at').default(sql`CURRENT_TIMESTAMP`),
 });
@@ -17,6 +18,7 @@ const warehouseTimeSlots = pgTable('warehouse_time_slots', {
   from: time('from').notNull(),
   to: time('to').notNull(),
   warehouseId: uuid('warehouse_id').notNull().references(() => warehouse.id, { onDelete: 'cascade' }),
+  isActive: boolean('is_active').default(true),  // New column for soft deletes
   createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
   updatedAt: timestamp('updated_at').default(sql`CURRENT_TIMESTAMP`),
 });
@@ -25,6 +27,7 @@ const visitorTypes = pgTable('visitor_types', {
   id: uuid('id').primaryKey().default(sql`uuid_generate_v4()`),
   name: varchar('name', { length: 100 }).notNull().unique(),
   description: text('description'),
+  isActive: boolean('is_active').default(true),  // New column for soft deletes
   createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
   updatedAt: timestamp('updated_at').default(sql`CURRENT_TIMESTAMP`),
 });

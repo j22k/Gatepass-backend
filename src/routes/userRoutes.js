@@ -16,8 +16,11 @@ router.post('/create', authenticateToken, userController.createUser);
 // update a user req.body: { name, email, phone, password, designation, role, warehouseId, isActive }
 router.put('/:id', authenticateToken, userController.updateUser);
 
-// delete a user
-router.delete('/:id', authenticateToken, userController.deleteUser);
+// disable a user
+router.put('/:id/disable', authenticateToken, userController.disableUser);
+
+// enable a user
+router.put('/:id/enable', authenticateToken, userController.enableUser);
 
 // get users by warehouse id
 router.get('/warehouse/:warehouseId', authenticateToken, userController.getUsersByWarehouseId);

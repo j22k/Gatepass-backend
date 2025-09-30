@@ -14,8 +14,11 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middleware
-app.use(cors());
-app.use(express.json());
+app.use(cors({
+  origin: process.env.NODE_ENV === 'production' ? process.env.ALLOWED_ORIGINS : '*', // Restrict in production
+  credentials: true,
+}));
+app.use(express.json({ limit: '10mb' })); // Add payload limit for security
 app.use(express.urlencoded({ extended: true }));
 
 // Routes
@@ -33,25 +36,26 @@ app.get('/health', (req, res) => {
   res.json({ 
     success: true, 
     message: 'Gatepass Backend API is running',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development',
   });
 });
-
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  console.error('Unhandled error:', err.message);
   res.status(500).json({
     success: false,
-    message: 'Something went wrong!'
+    message: 'Something went wrong!',
+    ...(process.env.NODE_ENV === 'development' && { error: err.message }), // Expose error in dev only
   });
 });
 
-// 404 handler (fixed)
+// 404 handler
 app.use((req, res) => {
   res.status(404).json({
     success: false,
-    message: 'Route not found'
+    message: 'Route not found',
   });
 });
 
@@ -59,6 +63,10 @@ app.listen(PORT, () => {
   console.log(`🚀 Server is running on port ${PORT}`);
   console.log(`📱 API Health Check: http://localhost:${PORT}/health`);
   console.log(`🔐 Auth Login: http://localhost:${PORT}/api/auth/login`);
+  // Log environment info securely
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`Environment: ${process.env.NODE_ENV}`);
+  }
 });
 
 module.exports = app;

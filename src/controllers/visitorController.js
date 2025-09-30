@@ -5,25 +5,29 @@ const { alias } = require('drizzle-orm/pg-core');  // Import alias from pg-core
 const { validateUuid } = require('../utils/uuidValidator'); // Import the validator
 const { sendApprovalEmail, sendRejectionEmail } = require('../services/emailService'); // Import email service
 
-// Helper function to update visitor request status
+/**
+ * Updates visitor request status based on approvals.
+ * @param {string} visitorRequestId - UUID of the visitor request.
+ */
 async function updateVisitorRequestStatus(visitorRequestId) {
-  const allApprovals = await db
-    .select({ status: approval.status })
-    .from(approval)
-    .where(eq(approval.visitorRequestId, visitorRequestId));
-  let newStatus = 'pending';
-  if (allApprovals.some(a => a.status === 'rejected')) {
-    newStatus = 'rejected';
-  } else if (allApprovals.every(a => a.status === 'approved')) {
-    newStatus = 'approved';
+  try {
+    const allApprovals = await db.select({ status: approval.status }).from(approval).where(eq(approval.visitorRequestId, visitorRequestId));
+    let newStatus = 'pending';
+    if (allApprovals.some(a => a.status === 'rejected')) {
+      newStatus = 'rejected';
+    } else if (allApprovals.every(a => a.status === 'approved')) {
+      newStatus = 'approved';
+    }
+    await db.update(visitorRequest).set({ status: newStatus }).where(eq(visitorRequest.id, visitorRequestId));
+  } catch (error) {
+    console.error('Error updating status:', error.message);
   }
-  await db
-    .update(visitorRequest)
-    .set({ status: newStatus })
-    .where(eq(visitorRequest.id, visitorRequestId));
 }
 
-// Helper function to generate a unique tracking code
+/**
+ * Generates a unique tracking code.
+ * @returns {string} Unique 8-character code.
+ */
 async function generateTrackingCode() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   let code;
@@ -37,7 +41,11 @@ async function generateTrackingCode() {
 }
 
 const visitorController = {
-  // Get all visitor requests
+  /**
+   * Retrieves all visitor requests with joined data.
+   * @param {Object} req - Express request object.
+   * @param {Object} res - Express response object.
+   */
   async getAllVisitorRequests(req, res) {
     try {
       const result = await db
@@ -63,7 +71,7 @@ const visitorController = {
 
       res.json({ success: true, data: result });
     } catch (error) {
-      console.error('Get all visitor requests error:', error);
+      console.error('Error fetching visitor requests:', error.message);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   },
@@ -528,12 +536,12 @@ const visitorController = {
       if (visitorDetails.length > 0) {
         const { email, name, trackingCode, warehouseName, timeSlotName, from, to, date } = visitorDetails[0];
         // Send approval email asynchronously
-        sendApprovalEmail(email, name, trackingCode, warehouseName, timeSlotName, date.toISOString().split('T')[0], from, to);
+        setImmediate(() => sendApprovalEmail(email, name, trackingCode, warehouseName, timeSlotName, date.toISOString().split('T')[0], from, to));
       }
 
       res.json({ success: true, message: 'Visitor request approved' });
     } catch (error) {
-      console.error('Approve visitor request error:', error);
+      console.error('Error approving request:', error.message);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   },
