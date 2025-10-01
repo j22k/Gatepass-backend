@@ -59,7 +59,16 @@ exports.up = (pgm) => {
       accompanying JSONB DEFAULT '[]',
       date DATE NOT NULL CHECK (date >= CURRENT_DATE),
       status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
-      tracking_code VARCHAR(8) UNIQUE,  -- New column for short tracking code
+
+      -- Visit tracking fields
+      visit_status VARCHAR(20) DEFAULT 'pending'
+          CHECK (visit_status IN ('pending','visited','no_show')),  
+      punctuality VARCHAR(10) 
+          CHECK (punctuality IN ('on_time','late')),                
+      arrived_at TIMESTAMP,                                         -- Actual arrival time
+      checked_out_at TIMESTAMP,                                     -- Actual checkout time
+
+      tracking_code VARCHAR(8) UNIQUE,  -- Short code for guest tracking
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
@@ -124,8 +133,6 @@ exports.up = (pgm) => {
 exports.down = (pgm) => {
   pgm.sql(`
     DROP TRIGGER IF EXISTS trg_insert_approvals ON visitor_request;
-    DROP FUNCTION IF EXISTS insert_approvals_for_request();
-    DROP FUNCTION IF EXISTS update_updated_at_column();
     DROP TRIGGER IF EXISTS update_warehouse_updated_at ON warehouse;
     DROP TRIGGER IF EXISTS update_warehouse_time_slots_updated_at ON warehouse_time_slots;
     DROP TRIGGER IF EXISTS update_visitor_types_updated_at ON visitor_types;
@@ -133,6 +140,8 @@ exports.down = (pgm) => {
     DROP TRIGGER IF EXISTS update_visitor_request_updated_at ON visitor_request;
     DROP TRIGGER IF EXISTS update_warehouse_workflow_updated_at ON warehouse_workflow;
     DROP TRIGGER IF EXISTS update_approval_updated_at ON approval;
+    DROP FUNCTION IF EXISTS insert_approvals_for_request();
+    DROP FUNCTION IF EXISTS update_updated_at_column();
     DROP TABLE IF EXISTS approval CASCADE;
     DROP TABLE IF EXISTS warehouse_workflow CASCADE;
     DROP TABLE IF EXISTS visitor_request CASCADE;

@@ -25,6 +25,7 @@ const authenticateToken = async (req, res, next) => {
       phone: users.phone,
       designation: users.designation,
       role: users.role,
+      warehouseId: warehouse.id,  // Add warehouse ID
       warehouseName: warehouse.name,
       isActive: users.isActive,
     })

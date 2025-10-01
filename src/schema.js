@@ -57,7 +57,11 @@ const visitorRequest = pgTable('visitor_request', {
   accompanying: jsonb('accompanying').default([]),
   date: date('date').notNull(),
   status: varchar('status', { length: 20 }).default('pending'),
-  trackingCode: varchar('tracking_code', { length: 8 }).unique(),  // New column for short tracking code
+  trackingCode: varchar('tracking_code', { length: 8 }).unique(),
+  visitStatus: varchar('visit_status', { length: 20 }).default('pending'),  // Added
+  punctuality: varchar('punctuality', { length: 10 }),  // Added
+  arrivedAt: timestamp('arrived_at'),  // Added
+  checkedOutAt: timestamp('checked_out_at'),  // Added
   createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
   updatedAt: timestamp('updated_at').default(sql`CURRENT_TIMESTAMP`),
 });

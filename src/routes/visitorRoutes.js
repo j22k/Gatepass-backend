@@ -40,4 +40,13 @@ router.put('/:id/reject', authenticateToken, visitorController.rejectVisitorRequ
 // Get visitor request by tracking code (public)
 router.get('/track/:trackingCode', visitorController.getVisitorRequestByTrackingCode);
 
+// Get all visitor requests by logged-in receptionist's warehouse
+router.get('/receptionist/all', authenticateToken, visitorController.getAllVisitorRequestsByReceptionistWarehouse);
+
+// Get today's visitor requests by logged-in receptionist's warehouse
+router.get('/receptionist/today', authenticateToken, visitorController.getTodayVisitorRequestsByReceptionistWarehouse);
+
+// Update visitor status by receptionist
+router.put('/receptionist/update/:id', authenticateToken, visitorController.updateVisitorStatusByReceptionist);
+
 module.exports = router;

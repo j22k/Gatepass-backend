@@ -1,5 +1,5 @@
 const db = require('../config/database');
-const { visitorRequest, visitorTypes, warehouse, warehouseTimeSlots, approval } = require('../schema');
+const { visitorRequest, visitorTypes, warehouse, warehouseTimeSlots, approval, users } = require('../schema');
 const { eq, and, or, sql, ne } = require('drizzle-orm');  // Import operators from drizzle-orm
 const { alias } = require('drizzle-orm/pg-core');  // Import alias from pg-core
 const { validateUuid } = require('../utils/uuidValidator'); // Import the validator
@@ -398,7 +398,23 @@ const visitorController = {
         return res.status(404).json({ success: false, message: 'Visitor request not found' });
       }
 
-      res.json({ success: true, data: result[0] });
+      const request = result[0];
+
+      // Fetch approvals for this request
+      const approvals = await db
+        .select({
+          stepNo: approval.stepNo,
+          status: approval.status,
+          approverName: users.name,
+        })
+        .from(approval)
+        .leftJoin(users, eq(approval.approver, users.id))
+        .where(eq(approval.visitorRequestId, request.id))
+        .orderBy(approval.stepNo);
+
+      request.approvals = approvals;
+
+      res.json({ success: true, data: request });
     } catch (error) {
       console.error('Get visitor request by tracking code error:', error);
       res.status(500).json({ success: false, message: 'Internal server error' });
@@ -593,6 +609,196 @@ const visitorController = {
       res.json({ success: true, message: 'Visitor request rejected' });
     } catch (error) {
       console.error('Reject visitor request error:', error);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  },
+
+  // Get all visitor requests by logged-in receptionist's warehouse
+  async getAllVisitorRequestsByReceptionistWarehouse(req, res) {
+    try {
+      if (req.user.role !== 'Receptionist') {
+        return res.status(403).json({ success: false, message: 'Access denied: Only receptionists can access this' });
+      }
+      const userWarehouseId = req.user.warehouseId;
+      if (!userWarehouseId) {
+        return res.status(400).json({ success: false, message: 'User does not have an assigned warehouse' });
+      }
+      const result = await db
+        .select({
+          id: visitorRequest.id,
+          name: visitorRequest.name,
+          phone: visitorRequest.phone,
+          email: visitorRequest.email,
+          accompanying: visitorRequest.accompanying,
+          date: visitorRequest.date,
+          status: visitorRequest.status,
+          trackingCode: visitorRequest.trackingCode,
+          visitStatus: visitorRequest.visitStatus,
+          punctuality: visitorRequest.punctuality,
+          arrivedAt: visitorRequest.arrivedAt,
+          checkedOutAt: visitorRequest.checkedOutAt,
+          visitorTypeName: visitorTypes.name,
+          warehouseName: warehouse.name,
+          timeSlotName: warehouseTimeSlots.name,
+          from: warehouseTimeSlots.from,
+          to: warehouseTimeSlots.to,
+        })
+        .from(visitorRequest)
+        .leftJoin(visitorTypes, eq(visitorRequest.visitorTypeId, visitorTypes.id))
+        .leftJoin(warehouse, eq(visitorRequest.warehouseId, warehouse.id))
+        .leftJoin(warehouseTimeSlots, eq(visitorRequest.warehouseTimeSlotId, warehouseTimeSlots.id))
+        .where(and(eq(visitorRequest.warehouseId, userWarehouseId), eq(visitorRequest.status, 'approved')))  // Filter approved only
+        .orderBy(visitorRequest.date);
+      
+      res.json({ success: true, data: result });
+    } catch (error) {
+      console.error('Get all visitor requests by receptionist warehouse error:', error);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  },
+
+  // Get today's visitor requests by logged-in receptionist's warehouse
+  async getTodayVisitorRequestsByReceptionistWarehouse(req, res) {
+    try {
+      console.log("getTodayVisitorRequestsByReceptionistWarehouse called");
+      console.log(req.user);
+      
+      if (req.user.role !== 'Receptionist') {
+        return res.status(403).json({ success: false, message: 'Access denied: Only receptionists can access this' });
+      }
+      const userWarehouseId = req.user.warehouseId;
+      if (!userWarehouseId) {
+        return res.status(400).json({ success: false, message: 'User does not have an assigned warehouse' });
+      }
+      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+      const result = await db
+        .select({
+          id: visitorRequest.id,
+          name: visitorRequest.name,
+          phone: visitorRequest.phone,
+          email: visitorRequest.email,
+          accompanying: visitorRequest.accompanying,
+          date: visitorRequest.date,
+          status: visitorRequest.status,
+          trackingCode: visitorRequest.trackingCode,
+          visitStatus: visitorRequest.visitStatus,
+          punctuality: visitorRequest.punctuality,
+          arrivedAt: visitorRequest.arrivedAt,
+          checkedOutAt: visitorRequest.checkedOutAt,
+          visitorTypeName: visitorTypes.name,
+          warehouseName: warehouse.name,
+          timeSlotName: warehouseTimeSlots.name,
+          from: warehouseTimeSlots.from,
+          to: warehouseTimeSlots.to,
+        })
+        .from(visitorRequest)
+        .leftJoin(visitorTypes, eq(visitorRequest.visitorTypeId, visitorTypes.id))
+        .leftJoin(warehouse, eq(visitorRequest.warehouseId, warehouse.id))
+        .leftJoin(warehouseTimeSlots, eq(visitorRequest.warehouseTimeSlotId, warehouseTimeSlots.id))
+        .where(and(eq(visitorRequest.date, today), eq(visitorRequest.warehouseId, userWarehouseId), eq(visitorRequest.status, 'approved')))  // Filter approved only
+        .orderBy(visitorRequest.date);
+
+      res.json({ success: true, data: result });
+    } catch (error) {
+      console.error('Get today visitor requests by receptionist warehouse error:', error);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  },
+
+  // Update visitor status by receptionist (only for today's approved requests in their warehouse)
+  async updateVisitorStatusByReceptionist(req, res) {
+    try {
+      console.log(req.body);
+      
+      if (req.user.role !== 'Receptionist') {
+        return res.status(403).json({ success: false, message: 'Access denied: Only receptionists can access this' });
+      }
+      const { id } = req.params;
+      if (!validateUuid(id)) {
+        return res.status(400).json({ success: false, message: 'Invalid visitor request ID format' });
+      }
+      const { visitStatus, arrivedAt, checkedOutAt, punctuality } = req.body;
+
+      // Ensure at least one field is provided
+      if (visitStatus === undefined && arrivedAt === undefined && checkedOutAt === undefined && punctuality === undefined) {
+        return res.status(400).json({ success: false, message: 'At least one field must be provided' });
+      }
+
+      const userWarehouseId = req.user.warehouseId;
+      if (!userWarehouseId) {
+        return res.status(400).json({ success: false, message: 'User does not have an assigned warehouse' });
+      }
+      const today = new Date().toISOString().split('T')[0];
+
+      // Check if request exists, is approved, in user's warehouse, and for today
+      const [existingRequest] = await db
+        .select()
+        .from(visitorRequest)
+        .where(and(
+          eq(visitorRequest.id, id),
+          eq(visitorRequest.status, 'approved'),
+          eq(visitorRequest.warehouseId, userWarehouseId),
+          eq(visitorRequest.date, today)
+        ))
+        .limit(1);
+
+      if (!existingRequest) {
+        return res.status(404).json({ success: false, message: 'Visitor request not found or not eligible for update' });
+      }
+
+      // Validate fields
+      if (visitStatus && !['pending', 'visited', 'no_show'].includes(visitStatus)) {
+        return res.status(400).json({ success: false, message: 'Invalid visit status' });
+      }
+      if (punctuality && !['on_time', 'late'].includes(punctuality)) {
+        return res.status(400).json({ success: false, message: 'Invalid punctuality' });
+      }
+
+      const updateData = {};
+      if (visitStatus !== undefined && visitStatus !== '') updateData.visitStatus = visitStatus;
+      if (arrivedAt != null && arrivedAt !== '') {  // Skip null or empty string
+        let arrivedDate;
+        if (arrivedAt.includes('T') || arrivedAt.includes('-')) {
+          arrivedDate = new Date(arrivedAt);
+        } else {
+          // Assume time string, combine with today
+          const today = new Date().toISOString().split('T')[0];
+          arrivedDate = new Date(`${today}T${arrivedAt}`);
+        }
+        if (isNaN(arrivedDate.getTime())) {
+          return res.status(400).json({ success: false, message: 'Invalid arrivedAt date/time' });
+        }
+        updateData.arrivedAt = arrivedDate;
+      }
+      if (checkedOutAt != null && checkedOutAt !== '') {  // Skip null or empty string
+        let checkedOutDate;
+        if (checkedOutAt.includes('T') || checkedOutAt.includes('-')) {
+          checkedOutDate = new Date(checkedOutAt);
+        } else {
+          // Assume time string, combine with today
+          const today = new Date().toISOString().split('T')[0];
+          checkedOutDate = new Date(`${today}T${checkedOutAt}`);
+        }
+        if (isNaN(checkedOutDate.getTime())) {
+          return res.status(400).json({ success: false, message: 'Invalid checkedOutAt date/time' });
+        }
+        updateData.checkedOutAt = checkedOutDate;
+      }
+      if (punctuality !== undefined && punctuality !== '') updateData.punctuality = punctuality;
+
+      const result = await db
+        .update(visitorRequest)
+        .set(updateData)
+        .where(eq(visitorRequest.id, id))
+        .returning();
+
+      if (result.length === 0) {
+        return res.status(404).json({ success: false, message: 'Visitor request not found' });
+      }
+
+      res.json({ success: true, data: result[0] });
+    } catch (error) {
+      console.error('Update visitor status by receptionist error:', error);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   },
