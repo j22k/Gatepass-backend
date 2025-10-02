@@ -49,4 +49,10 @@ router.get('/receptionist/today', authenticateToken, visitorController.getTodayV
 // Update visitor status by receptionist
 router.put('/receptionist/update/:id', authenticateToken, visitorController.updateVisitorStatusByReceptionist);
 
+// Get total pending visitor requests
+router.get('/stats/pending', authenticateToken, visitorController.getTotalPendingRequests);
+
+// Get total approved visitor requests for today
+router.get('/stats/approved-today', authenticateToken, visitorController.getTotalApprovedToday);
+
 module.exports = router;

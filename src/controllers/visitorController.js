@@ -6,12 +6,13 @@ const { validateUuid } = require('../utils/uuidValidator'); // Import the valida
 const { sendApprovalEmail, sendRejectionEmail } = require('../services/emailService'); // Import email service
 
 /**
- * Updates visitor request status based on approvals.
+ * Updates visitor request status based on approvals and sends emails on final status change.
  * @param {string} visitorRequestId - UUID of the visitor request.
  */
 async function updateVisitorRequestStatus(visitorRequestId) {
   try {
     const allApprovals = await db.select({ status: approval.status }).from(approval).where(eq(approval.visitorRequestId, visitorRequestId));
+    const previousStatus = await db.select({ status: visitorRequest.status }).from(visitorRequest).where(eq(visitorRequest.id, visitorRequestId)).then(res => res[0]?.status);
     let newStatus = 'pending';
     if (allApprovals.some(a => a.status === 'rejected')) {
       newStatus = 'rejected';
@@ -19,6 +20,38 @@ async function updateVisitorRequestStatus(visitorRequestId) {
       newStatus = 'approved';
     }
     await db.update(visitorRequest).set({ status: newStatus }).where(eq(visitorRequest.id, visitorRequestId));
+    
+    // Send email only if status changed to 'approved' or 'rejected'
+    if (newStatus !== previousStatus && (newStatus === 'approved' || newStatus === 'rejected')) {
+      const visitorDetails = await db
+        .select({
+          email: visitorRequest.email,
+          name: visitorRequest.name,
+          trackingCode: visitorRequest.trackingCode,
+          warehouseName: warehouse.name,
+          timeSlotName: warehouseTimeSlots.name,
+          from: warehouseTimeSlots.from,
+          to: warehouseTimeSlots.to,
+          date: visitorRequest.date,
+        })
+        .from(visitorRequest)
+        .leftJoin(warehouse, eq(visitorRequest.warehouseId, warehouse.id))
+        .leftJoin(warehouseTimeSlots, eq(visitorRequest.warehouseTimeSlotId, warehouseTimeSlots.id))
+        .where(eq(visitorRequest.id, visitorRequestId))
+        .limit(1);
+      
+      if (visitorDetails.length > 0) {
+        const { email, name, trackingCode, warehouseName, timeSlotName, from, to, date } = visitorDetails[0];
+        if (newStatus === 'approved') {
+          await sendApprovalEmail(email, name, trackingCode, warehouseName, timeSlotName, date.toISOString().split('T')[0], from, to);
+        } else if (newStatus === 'rejected') {
+          // Fetch rejection reason from approvals (use the first rejection reason if multiple)
+          const rejectionApproval = await db.select({ reason: approval.reason }).from(approval).where(and(eq(approval.visitorRequestId, visitorRequestId), eq(approval.status, 'rejected'))).limit(1);
+          const reason = rejectionApproval[0]?.reason || 'No specific reason provided';
+          await sendRejectionEmail(email, name, trackingCode, reason);
+        }
+      }
+    }
   } catch (error) {
     console.error('Error updating status:', error.message);
   }
@@ -400,12 +433,13 @@ const visitorController = {
 
       const request = result[0];
 
-      // Fetch approvals for this request
+      // Fetch approvals for this request, including reason
       const approvals = await db
         .select({
           stepNo: approval.stepNo,
           status: approval.status,
           approverName: users.name,
+          reason: approval.reason,  // New: Include reason
         })
         .from(approval)
         .leftJoin(users, eq(approval.approver, users.id))
@@ -528,32 +562,8 @@ const visitorController = {
         .update(approval)
         .set({ status: 'approved' })
         .where(and(eq(approval.visitorRequestId, id), eq(approval.approver, approverId)));
-      // Update visitor request status based on all approvals
+      // Update visitor request status based on all approvals (emails sent here if status changes)
       await updateVisitorRequestStatus(id);
-
-      // Fetch visitor details for email
-      const visitorDetails = await db
-        .select({
-          email: visitorRequest.email,
-          name: visitorRequest.name,
-          trackingCode: visitorRequest.trackingCode,
-          warehouseName: warehouse.name,
-          timeSlotName: warehouseTimeSlots.name,
-          from: warehouseTimeSlots.from,
-          to: warehouseTimeSlots.to,
-          date: visitorRequest.date,
-        })
-        .from(visitorRequest)
-        .leftJoin(warehouse, eq(visitorRequest.warehouseId, warehouse.id))
-        .leftJoin(warehouseTimeSlots, eq(visitorRequest.warehouseTimeSlotId, warehouseTimeSlots.id))
-        .where(eq(visitorRequest.id, id))
-        .limit(1);
-
-      if (visitorDetails.length > 0) {
-        const { email, name, trackingCode, warehouseName, timeSlotName, from, to, date } = visitorDetails[0];
-        // Send approval email asynchronously
-        setImmediate(() => sendApprovalEmail(email, name, trackingCode, warehouseName, timeSlotName, date.toISOString().split('T')[0], from, to));
-      }
 
       res.json({ success: true, message: 'Visitor request approved' });
     } catch (error) {
@@ -567,10 +577,13 @@ const visitorController = {
     try {
       const { id } = req.params;
       const approverId = req.user.id;
-      console.log('userId:', approverId);
-      console.log("rejected visitor requests called");
+      const { reason } = req.body;  // Accept reason from request body
       if (!validateUuid(id)) {
         return res.status(400).json({ success: false, message: 'Invalid visitor request ID format' });
+      }
+      // Validate reason if provided
+      if (reason && (typeof reason !== 'string' || reason.trim().length === 0)) {
+        return res.status(400).json({ success: false, message: 'Reason must be a non-empty string' });
       }
       // Check if approval exists for this user and request
       const [existingApproval] = await db
@@ -581,30 +594,13 @@ const visitorController = {
       if (!existingApproval) {
         return res.status(404).json({ success: false, message: 'Approval not found for this user' });
       }
-      // Update approval status
+      // Update approval status and reason
       await db
         .update(approval)
-        .set({ status: 'rejected' })
+        .set({ status: 'rejected', reason: reason?.trim() || null })
         .where(and(eq(approval.visitorRequestId, id), eq(approval.approver, approverId)));
-      // Update visitor request status based on all approvals
+      // Update visitor request status based on all approvals (emails sent here if status changes)
       await updateVisitorRequestStatus(id);
-
-      // Fetch visitor details for email
-      const visitorDetails = await db
-        .select({
-          email: visitorRequest.email,
-          name: visitorRequest.name,
-          trackingCode: visitorRequest.trackingCode,
-        })
-        .from(visitorRequest)
-        .where(eq(visitorRequest.id, id))
-        .limit(1);
-
-      if (visitorDetails.length > 0) {
-        const { email, name, trackingCode } = visitorDetails[0];
-        // Send rejection email asynchronously (reason can be added if available)
-        sendRejectionEmail(email, name, trackingCode);
-      }
 
       res.json({ success: true, message: 'Visitor request rejected' });
     } catch (error) {
@@ -660,9 +656,6 @@ const visitorController = {
   // Get today's visitor requests by logged-in receptionist's warehouse
   async getTodayVisitorRequestsByReceptionistWarehouse(req, res) {
     try {
-      console.log("getTodayVisitorRequestsByReceptionistWarehouse called");
-      console.log(req.user);
-      
       if (req.user.role !== 'Receptionist') {
         return res.status(403).json({ success: false, message: 'Access denied: Only receptionists can access this' });
       }
@@ -708,8 +701,6 @@ const visitorController = {
   // Update visitor status by receptionist (only for today's approved requests in their warehouse)
   async updateVisitorStatusByReceptionist(req, res) {
     try {
-      console.log(req.body);
-      
       if (req.user.role !== 'Receptionist') {
         return res.status(403).json({ success: false, message: 'Access denied: Only receptionists can access this' });
       }
@@ -799,6 +790,29 @@ const visitorController = {
       res.json({ success: true, data: result[0] });
     } catch (error) {
       console.error('Update visitor status by receptionist error:', error);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  },
+
+  // Get total pending visitor requests
+  async getTotalPendingRequests(req, res) {
+    try {
+      const result = await db.select({ count: sql`COUNT(*)` }).from(visitorRequest).where(eq(visitorRequest.status, 'pending'));
+      res.json({ success: true, total: parseInt(result[0].count) });
+    } catch (error) {
+      console.error('Error fetching total pending requests:', error.message);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  },
+
+  // Get total approved visitor requests for today
+  async getTotalApprovedToday(req, res) {
+    try {
+      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+      const result = await db.select({ count: sql`COUNT(*)` }).from(visitorRequest).where(and(eq(visitorRequest.status, 'approved'), eq(visitorRequest.date, today)));
+      res.json({ success: true, total: parseInt(result[0].count) });
+    } catch (error) {
+      console.error('Error fetching total approved today:', error.message);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   },

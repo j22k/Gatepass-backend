@@ -84,6 +84,7 @@ const approval = pgTable('approval', {
   stepNo: integer('step_no').notNull(),
   approver: uuid('approver').notNull().references(() => users.id),
   status: varchar('status', { length: 20 }).default('pending'),
+  reason: text('reason'),  //  column for rejection reason
   createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
   updatedAt: timestamp('updated_at').default(sql`CURRENT_TIMESTAMP`),
 });

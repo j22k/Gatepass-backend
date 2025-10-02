@@ -7,6 +7,10 @@ const router = express.Router();
 // get all warehouses
 router.get('/getall', warehouseController.getAllWarehouses);
 
+// get all disabled warehouses
+router.get('/getall/disabled', authenticateToken, warehouseController.getAllDisabledWarehouses);
+
+
 // get warehouse by id
 router.get('/:id', authenticateToken, warehouseController.getWarehouseById);
 
@@ -21,8 +25,5 @@ router.put('/:id/disable', authenticateToken, warehouseController.disableWarehou
 
 // enable a warehouse
 router.put('/:id/enable', authenticateToken, warehouseController.enableWarehouse);
-
-// get all disabled warehouses
-router.get('/getall/disabled', authenticateToken, warehouseController.getAllDisabledWarehouses);
 
 module.exports = router;

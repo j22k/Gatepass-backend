@@ -1,7 +1,7 @@
 const bcrypt = require('bcrypt');
 const db = require('../config/database');
 const { users, warehouse, warehouseWorkflow, approval } = require('../schema');
-const { eq, and } = require('drizzle-orm');
+const { eq, and, sql } = require('drizzle-orm');  // Added sql to import
 const { validateUuid } = require('../utils/uuidValidator'); // Import the validator
 
 const userController = {
@@ -34,6 +34,7 @@ const userController = {
   async getUserById(req, res) {
     try {
       const { id } = req.params;
+      
       if (!validateUuid(id)) { // Validate ID format
         return res.status(400).json({ success: false, message: 'Invalid ID format' });
       }
@@ -68,7 +69,6 @@ const userController = {
   async createUser(req, res) {
     try {
       const { name, email, phone, password, designation, role, warehouseId } = req.body;
-      console.log('req.body:', req.body);
       
       // Validate warehouseId if provided
       if (warehouseId) {
@@ -249,6 +249,18 @@ const userController = {
       res.json({ success: true, data: result });
     } catch (error) {
       console.error('Get users by warehouse ID error:', error);
+      res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  },
+
+  // Get total active users
+  async getTotalActiveUsers(req, res) {
+    try {
+      
+      const result = await db.select({ count: sql`COUNT(*)` }).from(users).where(eq(users.isActive, true));
+      res.json({ success: true, total: parseInt(result[0].count) });
+    } catch (error) {
+      console.error('Error fetching total active users:', error.message);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
   },

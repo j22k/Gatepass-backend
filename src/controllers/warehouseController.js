@@ -1,6 +1,6 @@
 const db = require('../config/database');
 const { warehouse } = require('../schema');
-const { eq } = require('drizzle-orm');
+const { eq, sql } = require('drizzle-orm');  // Added sql to import
 const { validateUuid } = require('../utils/uuidValidator'); // Import the validator
 
 const warehouseController = {
@@ -168,7 +168,9 @@ const warehouseController = {
       console.error('Error fetching disabled warehouses:', error.message);
       res.status(500).json({ success: false, message: 'Internal server error' });
     }
-  }
+  },
+
+
 };
 
 module.exports = warehouseController;

@@ -7,6 +7,12 @@ const router = express.Router();
 // get all users
 router.get('/getall', authenticateToken, userController.getAllUsers);
 
+// get users by warehouse id
+router.get('/warehouse/:warehouseId', authenticateToken, userController.getUsersByWarehouseId);
+
+// get total active users
+router.get('/total-active', authenticateToken, userController.getTotalActiveUsers);
+
 // get user by id
 router.get('/:id', authenticateToken, userController.getUserById);
 
@@ -21,8 +27,5 @@ router.put('/:id/disable', authenticateToken, userController.disableUser);
 
 // enable a user
 router.put('/:id/enable', authenticateToken, userController.enableUser);
-
-// get users by warehouse id
-router.get('/warehouse/:warehouseId', authenticateToken, userController.getUsersByWarehouseId);
 
 module.exports = router;

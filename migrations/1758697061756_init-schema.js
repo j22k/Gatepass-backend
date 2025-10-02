@@ -90,6 +90,7 @@ exports.up = (pgm) => {
       step_no INT NOT NULL,
       approver UUID NOT NULL REFERENCES users(id),
       status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
+      reason TEXT,  -- New column for rejection reason
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
