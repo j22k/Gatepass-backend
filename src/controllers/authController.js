@@ -78,7 +78,8 @@ const authController = {
             isActive: user.isActive
           },
           redirectTo: user.redirectTo,
-          token: `Bearer ${token}`
+          // Updated: Return only the JWT token (client should prefix "Bearer")
+          token: token
         }
       });
 
@@ -99,19 +100,14 @@ const authController = {
         return res.status(401).json({ success: false, message: 'Invalid or expired token' });
       }
 
-      const user = { ...req.user };
-      
-      if (user.role === 'Admin') {
-        user.redirectTo = '/admin/admin-dashboard';
-      } else if (user.role === 'Receptionist') {
-        user.redirectTo = '/reception/reception-dashboard';
-      } else {
-        user.redirectTo = '/approver/approver-dashboard';
-      }
-      
       res.json({
         success: true,
-        user
+        user: {
+          ...req.user,
+          redirectTo: req.user.role === 'Admin' ? '/admin/admin-dashboard' :
+                      req.user.role === 'Receptionist' ? '/reception/reception-dashboard' :
+                      '/approver/approver-dashboard',
+        },
       });
     } catch (error) {
       console.error('Verify token error:', error);

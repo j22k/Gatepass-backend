@@ -6,9 +6,10 @@ const { eq, and } = require('drizzle-orm');
 // Middleware to verify JWT token
 const authenticateToken = async (req, res, next) => {
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+  // Updated: Support both "Bearer token" and plain "token" formats
+  const token = authHeader && (authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : authHeader);
 
-  if (!token) {
+  if (!token || typeof token !== 'string' || token.trim() === '') {
     return res.status(401).json({ 
       success: false, 
       message: 'Access token is required' 
@@ -42,8 +43,12 @@ const authenticateToken = async (req, res, next) => {
     }
 
     req.user = result[0];
+    console.log(req.user);
+    
     next();
   } catch (error) {
+    console.log("Error in token authentication:", error.message);
+    
     return res.status(403).json({ 
       success: false, 
       message: 'Invalid token' 
@@ -55,6 +60,8 @@ const authenticateToken = async (req, res, next) => {
 const authorizeRoles = (...roles) => {
   return (req, res, next) => {
     if (!req.user) {
+      console.log("Authentication check failed");
+      
       return res.status(401).json({ 
         success: false, 
         message: 'Authentication required' 
@@ -62,6 +69,8 @@ const authorizeRoles = (...roles) => {
     }
 
     if (!roles.includes(req.user.role)) {
+      console.log("Authorization check failed for role:", req.user.role);
+      
       return res.status(403).json({ 
         success: false, 
         message: 'Insufficient permissions' 
