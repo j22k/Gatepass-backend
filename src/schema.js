@@ -62,6 +62,8 @@ const visitorRequest = pgTable('visitor_request', {
   punctuality: varchar('punctuality', { length: 10 }),  // Added
   arrivedAt: timestamp('arrived_at'),  // Added
   checkedOutAt: timestamp('checked_out_at'),  // Added
+  allergenInformation: jsonb('allergen_information').default(sql`'{}'::jsonb`),  // Added: JSONB field for allergen information with default empty object
+  declarationAcknowledged: boolean('declaration_acknowledged').default(false),  // Added: BOOLEAN field for declaration acknowledgment with default false
   createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
   updatedAt: timestamp('updated_at').default(sql`CURRENT_TIMESTAMP`),
 });
