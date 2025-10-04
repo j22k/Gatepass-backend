@@ -1,6 +1,6 @@
 const db = require('../config/database');
 const { warehouseTimeSlots, warehouse, warehouseWorkflow, visitorTypes, users, approval, visitorRequest } = require('../schema');
-const { eq, and, not, inArray, sql } = require('drizzle-orm');  // ✅ added sql
+const { eq, and, not, inArray, sql } = require('drizzle-orm');
 const { validateUuid } = require('../utils/uuidValidator');
 
 const warehouseworkflowController = {
@@ -13,7 +13,7 @@ const warehouseworkflowController = {
     try {
       const { warehouseId } = req.params;
       if (!validateUuid(warehouseId)) {
-        return res.status(400).json({ success: false, message: 'Invalid warehouse ID format' });
+        return res.status(400).json({ success: false, message: 'Invalid warehouse ID format. Please provide a valid UUID.' });
       }
       const rawWorkflows = await db
         .select({
@@ -29,6 +29,10 @@ const warehouseworkflowController = {
         .innerJoin(users, eq(warehouseWorkflow.approver, users.id))
         .where(eq(warehouseWorkflow.warehouseId, warehouseId))
         .orderBy(visitorTypes.name, warehouseWorkflow.stepNo);
+
+      if (!rawWorkflows.length) {
+        return res.status(200).json({ success: true, message: 'No workflow data found for this warehouse.', data: {} });
+      }
 
       // Group by visitor type
       const grouped = rawWorkflows.reduce((acc, row) => {
@@ -47,10 +51,10 @@ const warehouseworkflowController = {
         return acc;
       }, {});
 
-      res.json(grouped);
+      res.json({ success: true, message: 'Workflow data fetched successfully.', data: grouped });
     } catch (error) {
-      console.error('Error fetching workflow data:', error.message);
-      res.status(500).json({ success: false, message: 'Internal server error' });
+      console.error('Error fetching workflow data:', error);
+      res.status(500).json({ success: false, message: 'Failed to fetch workflow data. Please try again later.' });
     }
   },
 
@@ -63,11 +67,12 @@ const warehouseworkflowController = {
     try {
       const { warehouse_id, visitor_type_id, step_no, approver } = req.body;
       if (!validateUuid(warehouse_id) || !validateUuid(visitor_type_id) || !validateUuid(approver) || !Number.isInteger(step_no) || step_no <= 0) {
-        return res.status(400).json({ success: false, message: 'Invalid input: All IDs must be valid UUIDs, step_no must be a positive integer' });
+        return res.status(400).json({ success: false, message: 'Invalid input: All IDs must be valid UUIDs and step_no must be a positive integer.' });
       }
 
+      // Check for duplicate in a single query
       const existing = await db
-        .select()
+        .select({ id: warehouseWorkflow.id })
         .from(warehouseWorkflow)
         .where(
           and(
@@ -79,7 +84,7 @@ const warehouseworkflowController = {
         );
 
       if (existing.length > 0) {
-        return res.status(409).json({ success: false, message: 'Workflow step already exists for this warehouse and visitor type' });
+        return res.status(409).json({ success: false, message: 'A workflow step with the same details already exists for this warehouse and visitor type.' });
       }
 
       const [newWorkflow] = await db
@@ -92,7 +97,7 @@ const warehouseworkflowController = {
         })
         .returning();
 
-      // After adding workflow, check for existing pending requests without approvals
+      // Find all pending requests without approvals in a single query
       const pendingRequests = await db
         .select({ id: visitorRequest.id })
         .from(visitorRequest)
@@ -105,11 +110,12 @@ const warehouseworkflowController = {
           )
         )
         .groupBy(visitorRequest.id)
-        .having(sql`COUNT(${approval.id}) = 0`);  // No approvals exist
+        .having(sql`COUNT(${approval.id}) = 0`);
 
-      // For each such request, create approvals based on the full workflow
-      for (const req of pendingRequests) {
-        const fullWorkflow = await db
+      // Fetch full workflow once if needed
+      let fullWorkflow = [];
+      if (pendingRequests.length > 0) {
+        fullWorkflow = await db
           .select({ stepNo: warehouseWorkflow.stepNo, approver: warehouseWorkflow.approver })
           .from(warehouseWorkflow)
           .where(
@@ -119,23 +125,32 @@ const warehouseworkflowController = {
             )
           )
           .orderBy(warehouseWorkflow.stepNo);
+      }
 
-        for (const wf of fullWorkflow) {
-          await db.insert(approval).values({
-            visitorRequestId: req.id,
-            stepNo: wf.stepNo,
-            approver: wf.approver
-          });
+      // Batch insert approvals for all pending requests
+      if (pendingRequests.length > 0 && fullWorkflow.length > 0) {
+        const approvalInserts = [];
+        for (const req of pendingRequests) {
+          for (const wf of fullWorkflow) {
+            approvalInserts.push({
+              visitorRequestId: req.id,
+              stepNo: wf.stepNo,
+              approver: wf.approver
+            });
+          }
+        }
+        if (approvalInserts.length > 0) {
+          await db.insert(approval).values(approvalInserts);
         }
       }
 
-      res.status(201).json({ success: true, data: newWorkflow });
+      res.status(201).json({ success: true, message: 'Workflow step added successfully.', data: newWorkflow });
     } catch (error) {
-      console.error('Error adding workflow:', error.message);
+      console.error('Error adding workflow:', error);
       if (error.code === '23505') {
-        return res.status(409).json({ success: false, message: 'Workflow step already exists for this warehouse and visitor type' });
+        return res.status(409).json({ success: false, message: 'A workflow step with the same details already exists.' });
       }
-      res.status(500).json({ success: false, message: 'Internal server error' });
+      res.status(500).json({ success: false, message: 'Failed to add workflow step. Please try again later.' });
     }
   },
 
@@ -149,18 +164,19 @@ const warehouseworkflowController = {
       const { id } = req.params;
       const { step_no, approver } = req.body;
       if (!validateUuid(id) || !validateUuid(approver) || !Number.isInteger(step_no) || step_no <= 0) {
-        return res.status(400).json({ success: false, message: 'Invalid input: ID and approver must be valid UUIDs, step_no must be a positive integer' });
+        return res.status(400).json({ success: false, message: 'Invalid input: ID and approver must be valid UUIDs, step_no must be a positive integer.' });
       }
 
       const existing = await db.select().from(warehouseWorkflow).where(eq(warehouseWorkflow.id, id));
       if (existing.length === 0) {
-        return res.status(404).json({ success: false, message: 'Workflow entry not found' });
+        return res.status(404).json({ success: false, message: 'Workflow entry not found.' });
       }
 
       const { warehouseId, visitorTypeId } = existing[0];
 
+      // Check for conflict in a single query
       const conflict = await db
-        .select()
+        .select({ id: warehouseWorkflow.id })
         .from(warehouseWorkflow)
         .where(
           and(
@@ -168,12 +184,12 @@ const warehouseworkflowController = {
             eq(warehouseWorkflow.visitorTypeId, visitorTypeId),
             eq(warehouseWorkflow.stepNo, step_no),
             eq(warehouseWorkflow.approver, approver),
-            not(eq(warehouseWorkflow.id, id)) // ✅ replaced whereNot
+            not(eq(warehouseWorkflow.id, id))
           )
         );
 
       if (conflict.length > 0) {
-        return res.status(409).json({ success: false, message: 'Workflow step already exists for this warehouse and visitor type' });
+        return res.status(409).json({ success: false, message: 'Another workflow step with the same details already exists for this warehouse and visitor type.' });
       }
 
       const [updatedWorkflow] = await db
@@ -182,13 +198,13 @@ const warehouseworkflowController = {
         .where(eq(warehouseWorkflow.id, id))
         .returning();
 
-      res.json({ success: true, data: updatedWorkflow });
+      res.json({ success: true, message: 'Workflow step updated successfully.', data: updatedWorkflow });
     } catch (error) {
-      console.error('Error updating workflow:', error.message);
+      console.error('Error updating workflow:', error);
       if (error.code === '23505') {
-        return res.status(409).json({ success: false, message: 'Workflow step conflict' });
+        return res.status(409).json({ success: false, message: 'Workflow step conflict. Please use different details.' });
       }
-      res.status(500).json({ success: false, message: 'Internal server error' });
+      res.status(500).json({ success: false, message: 'Failed to update workflow step. Please try again later.' });
     }
   },
 
@@ -201,17 +217,17 @@ const warehouseworkflowController = {
     try {
       const { id } = req.params;
       if (!validateUuid(id)) {
-        return res.status(400).json({ success: false, message: 'Invalid workflow ID format' });
+        return res.status(400).json({ success: false, message: 'Invalid workflow ID format. Please provide a valid UUID.' });
       }
 
       const existing = await db.select().from(warehouseWorkflow).where(eq(warehouseWorkflow.id, id));
       if (existing.length === 0) {
-        return res.status(404).json({ success: false, message: 'Workflow entry not found' });
+        return res.status(404).json({ success: false, message: 'Workflow entry not found.' });
       }
 
       const { warehouseId, visitorTypeId, stepNo, approver } = existing[0];
 
-      // Delete matching approvals before deleting the workflow
+      // Get all relevant visitor request IDs in one query
       const relevantRequestIds = await db
         .select({ id: visitorRequest.id })
         .from(visitorRequest)
@@ -231,13 +247,12 @@ const warehouseworkflowController = {
       }
 
       await db.delete(warehouseWorkflow).where(eq(warehouseWorkflow.id, id));
-      res.status(204).send();
+      res.status(200).json({ success: true, message: 'Workflow step and related approvals deleted successfully.' });
     } catch (error) {
-      console.error('Error deleting workflow:', error.message);
-      res.status(500).json({ success: false, message: 'Internal server error' });
+      console.error('Error deleting workflow:', error);
+      res.status(500).json({ success: false, message: 'Failed to delete workflow step. Please try again later.' });
     }
   }
 };
 
-module.exports = warehouseworkflowController;
 module.exports = warehouseworkflowController;

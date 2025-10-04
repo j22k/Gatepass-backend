@@ -23,10 +23,10 @@ const userController = {
         .leftJoin(warehouse, eq(users.warehouseId, warehouse.id))
         .orderBy(users.name);
 
-      res.json({ success: true, data: result });
+      res.json({ success: true, message: 'Users fetched successfully', data: result });
     } catch (error) {
       console.error('Get all users error:', error);
-      res.status(500).json({ success: false, message: 'Internal server error' });
+      res.status(500).json({ success: false, message: 'Failed to fetch users. Please try again later.' });
     }
   },
 
@@ -34,10 +34,10 @@ const userController = {
   async getUserById(req, res) {
     try {
       const { id } = req.params;
-      
-      if (!validateUuid(id)) { // Validate ID format
-        return res.status(400).json({ success: false, message: 'Invalid ID format' });
+      if (!validateUuid(id)) {
+        return res.status(400).json({ success: false, message: 'Invalid user ID format' });
       }
+
       const result = await db
         .select({
           id: users.id,
@@ -51,17 +51,17 @@ const userController = {
         })
         .from(users)
         .leftJoin(warehouse, eq(users.warehouseId, warehouse.id))
-        .where(eq(users.id, id), eq(users.isActive, true))  // Filter active only
+        .where(eq(users.id, id))
         .limit(1);
 
       if (result.length === 0) {
         return res.status(404).json({ success: false, message: 'User not found' });
       }
 
-      res.json({ success: true, data: result[0] });
+      res.json({ success: true, message: 'User fetched successfully', data: result[0] });
     } catch (error) {
       console.error('Get user by ID error:', error);
-      res.status(500).json({ success: false, message: 'Internal server error' });
+      res.status(500).json({ success: false, message: 'Failed to fetch user. Please try again later.' });
     }
   },
 
@@ -69,7 +69,7 @@ const userController = {
   async createUser(req, res) {
     try {
       const { name, email, phone, password, designation, role, warehouseId } = req.body;
-      
+
       // Validate warehouseId if provided
       if (warehouseId) {
         if (!validateUuid(warehouseId)) {
@@ -105,10 +105,10 @@ const userController = {
           isActive: users.isActive,
         });
 
-      res.status(201).json({ success: true, data: result[0] });
+      res.status(201).json({ success: true, message: 'User created successfully', data: result[0] });
     } catch (error) {
       console.error('Create user error:', error);
-      res.status(500).json({ success: false, message: 'Internal server error' });
+      res.status(500).json({ success: false, message: 'Failed to create user. Please try again later.' });
     }
   },
 
@@ -147,14 +147,14 @@ const userController = {
         return res.status(404).json({ success: false, message: 'User not found' });
       }
 
-      res.json({ success: true, data: result[0] });
+      res.json({ success: true, message: 'User updated successfully', data: result[0] });
     } catch (error) {
       console.error('Update user error:', error);
-      res.status(500).json({ success: false, message: 'Internal server error' });
+      res.status(500).json({ success: false, message: 'Failed to update user. Please try again later.' });
     }
   },
 
-  // Delete a user (soft delete)
+  // Disable a user
   async disableUser(req, res) {
     try {
       const { id } = req.params;
@@ -187,10 +187,10 @@ const userController = {
         return res.status(404).json({ success: false, message: 'User not found' });
       }
 
-      res.json({ success: true, data: result[0] });
+      res.json({ success: true, message: 'User disabled successfully', data: result[0] });
     } catch (error) {
       console.error('Disable user error:', error);
-      res.status(500).json({ success: false, message: 'Internal server error' });
+      res.status(500).json({ success: false, message: 'Failed to disable user. Please try again later.' });
     }
   },
 
@@ -211,10 +211,10 @@ const userController = {
         return res.status(404).json({ success: false, message: 'User not found' });
       }
 
-      res.json({ success: true, data: result[0] });
+      res.json({ success: true, message: 'User enabled successfully', data: result[0] });
     } catch (error) {
       console.error('Enable user error:', error);
-      res.status(500).json({ success: false, message: 'Internal server error' });
+      res.status(500).json({ success: false, message: 'Failed to enable user. Please try again later.' });
     }
   },
 
@@ -246,24 +246,24 @@ const userController = {
         .where(eq(users.warehouseId, warehouseId), eq(users.isActive, true)) // Filter active only
         .orderBy(users.name);
 
-      res.json({ success: true, data: result });
+      res.json({ success: true, message: 'Users fetched successfully', data: result });
     } catch (error) {
       console.error('Get users by warehouse ID error:', error);
-      res.status(500).json({ success: false, message: 'Internal server error' });
+      res.status(500).json({ success: false, message: 'Failed to fetch users. Please try again later.' });
     }
   },
 
   // Get total active users
   async getTotalActiveUsers(req, res) {
     try {
-      
       const result = await db.select({ count: sql`COUNT(*)` }).from(users).where(eq(users.isActive, true));
-      res.json({ success: true, total: parseInt(result[0].count) });
+      res.json({ success: true, message: 'Total active users fetched successfully', total: parseInt(result[0].count) });
     } catch (error) {
       console.error('Error fetching total active users:', error.message);
-      res.status(500).json({ success: false, message: 'Internal server error' });
+      res.status(500).json({ success: false, message: 'Failed to fetch total active users. Please try again later.' });
     }
   },
 };
 
+module.exports = userController;
 module.exports = userController;

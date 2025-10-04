@@ -1,28 +1,47 @@
 const express = require('express');
+const { check } = require('express-validator');
 const { authenticateToken, authorizeRoles } = require('../middlewares/auth');
 const visitortypeController = require('../controllers/visitortypeController');
+const validateRequest = require('../utils/validator');
 
 const router = express.Router();
 
-// get all visitor types
+// Middleware for authentication and authorization
+const adminAuth = [authenticateToken, authorizeRoles('Admin')];
+
+// Get all visitor types
 router.get('/getall', visitortypeController.getAllVisitorTypes);
 
-// get visitor type by id
-router.get('/:id', authenticateToken, authorizeRoles('Admin'), visitortypeController.getVisitorTypeById);
+// Get visitor type by ID
+router.get('/:id', [
+	check('id').isUUID().withMessage('Invalid ID format')
+], validateRequest, adminAuth, visitortypeController.getVisitorTypeById);
 
-// create a new visitor type req.body: { name }
-router.post('/create', authenticateToken, authorizeRoles('Admin'), visitortypeController.createVisitorType);
+// Create a new visitor type
+router.post('/create', [
+	check('name').notEmpty().withMessage('Name is required').trim().escape(),
+	check('description').optional().trim().escape()
+], validateRequest, adminAuth, visitortypeController.createVisitorType);
 
-// update a visitor type req.body: { name }
-router.put('/:id', authenticateToken, authorizeRoles('Admin'), visitortypeController.updateVisitorType);
+// Update a visitor type
+router.put('/:id', [
+	check('id').isUUID().withMessage('Invalid ID format'),
+	check('name').optional().notEmpty().withMessage('Name must be a non-empty string').trim().escape(),
+	check('description').optional().trim().escape(),
+	check('isActive').optional().isBoolean().withMessage('isActive must be boolean')
+], validateRequest, adminAuth, visitortypeController.updateVisitorType);
 
-// disable a visitor type
-router.put('/:id/disable', authenticateToken, authorizeRoles('Admin'), visitortypeController.disableVisitorType);
+// Disable a visitor type
+router.put('/:id/disable', [
+	check('id').isUUID().withMessage('Invalid ID format')
+], validateRequest, adminAuth, visitortypeController.disableVisitorType);
 
-// enable a visitor type
-router.put('/:id/enable', authenticateToken, authorizeRoles('Admin'), visitortypeController.enableVisitorType);
+// Enable a visitor type
+router.put('/:id/enable', [
+	check('id').isUUID().withMessage('Invalid ID format')
+], validateRequest, adminAuth, visitortypeController.enableVisitorType);
 
-// get all disabled visitor types
-router.get('/getall/disabled', authenticateToken, authorizeRoles('Admin'), visitortypeController.getAllDisabledVisitorTypes);
+// Get all disabled visitor types
+router.get('/getall/disabled', adminAuth, visitortypeController.getAllDisabledVisitorTypes);
 
 module.exports = router;

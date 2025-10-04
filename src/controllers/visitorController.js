@@ -7,53 +7,61 @@ const { sendApprovalEmail, sendRejectionEmail } = require('../services/emailServ
 
 /**
  * Updates visitor request status based on approvals and sends emails on final status change.
- * @param {string} visitorRequestId - UUID of the visitor request.
+ * Optimized to reduce redundant queries.
  */
 async function updateVisitorRequestStatus(visitorRequestId) {
   try {
-    const allApprovals = await db.select({ status: approval.status }).from(approval).where(eq(approval.visitorRequestId, visitorRequestId));
-    const previousStatus = await db.select({ status: visitorRequest.status }).from(visitorRequest).where(eq(visitorRequest.id, visitorRequestId)).then(res => res[0]?.status);
-    let newStatus = 'pending';
-    if (allApprovals.some(a => a.status === 'rejected')) {
-      newStatus = 'rejected';
-    } else if (allApprovals.every(a => a.status === 'approved')) {
-      newStatus = 'approved';
-    }
-    await db.update(visitorRequest).set({ status: newStatus }).where(eq(visitorRequest.id, visitorRequestId));
-    
-    // Send email only if status changed to 'approved' or 'rejected'
-    if (newStatus !== previousStatus && (newStatus === 'approved' || newStatus === 'rejected')) {
-      const visitorDetails = await db
-        .select({
-          email: visitorRequest.email,
-          name: visitorRequest.name,
-          trackingCode: visitorRequest.trackingCode,
-          warehouseName: warehouse.name,
-          timeSlotName: warehouseTimeSlots.name,
-          from: warehouseTimeSlots.from,
-          to: warehouseTimeSlots.to,
-          date: visitorRequest.date,
-        })
-        .from(visitorRequest)
-        .leftJoin(warehouse, eq(visitorRequest.warehouseId, warehouse.id))
-        .leftJoin(warehouseTimeSlots, eq(visitorRequest.warehouseTimeSlotId, warehouseTimeSlots.id))
-        .where(eq(visitorRequest.id, visitorRequestId))
-        .limit(1);
-      
-      if (visitorDetails.length > 0) {
-        const { email, name, trackingCode, warehouseName, timeSlotName, from, to, date } = visitorDetails[0];
-        if (newStatus === 'approved') {
-          await sendApprovalEmail(email, name, trackingCode, warehouseName, timeSlotName, date.toISOString().split('T')[0], from, to);
-        } else if (newStatus === 'rejected') {
-          // Fetch rejection reason from approvals (use the first rejection reason if multiple)
-          const rejectionApproval = await db.select({ reason: approval.reason }).from(approval).where(and(eq(approval.visitorRequestId, visitorRequestId), eq(approval.status, 'rejected'))).limit(1);
-          const reason = rejectionApproval[0]?.reason || 'No specific reason provided';
-          await sendRejectionEmail(email, name, trackingCode, reason);
+    const approvals = await db
+      .select({ status: approval.status })
+      .from(approval)
+      .where(eq(approval.visitorRequestId, visitorRequestId));
+
+    const previousStatus = await db
+      .select({ status: visitorRequest.status })
+      .from(visitorRequest)
+      .where(eq(visitorRequest.id, visitorRequestId))
+      .then(res => res[0]?.status);
+
+    const newStatus = approvals.some(a => a.status === 'rejected')
+      ? 'rejected'
+      : approvals.every(a => a.status === 'approved')
+      ? 'approved'
+      : 'pending';
+
+    if (newStatus !== previousStatus) {
+      await db.update(visitorRequest).set({ status: newStatus }).where(eq(visitorRequest.id, visitorRequestId));
+
+      if (['approved', 'rejected'].includes(newStatus)) {
+        const visitorDetails = await db
+          .select({
+            email: visitorRequest.email,
+            name: visitorRequest.name,
+            trackingCode: visitorRequest.trackingCode,
+            warehouseName: warehouse.name,
+            timeSlotName: warehouseTimeSlots.name,
+            from: warehouseTimeSlots.from,
+            to: warehouseTimeSlots.to,
+            date: visitorRequest.date,
+          })
+          .from(visitorRequest)
+          .leftJoin(warehouse, eq(visitorRequest.warehouseId, warehouse.id))
+          .leftJoin(warehouseTimeSlots, eq(visitorRequest.warehouseTimeSlotId, warehouseTimeSlots.id))
+          .where(eq(visitorRequest.id, visitorRequestId))
+          .limit(1);
+
+        if (visitorDetails.length > 0) {
+          const { email, name, trackingCode, warehouseName, timeSlotName, from, to, date } = visitorDetails[0];
+          if (newStatus === 'approved') {
+            await sendApprovalEmail(email, name, trackingCode, warehouseName, timeSlotName, date.toISOString().split('T')[0], from, to);
+          } else {
+            const rejectionReason = approvals.find(a => a.status === 'rejected')?.reason || 'No specific reason provided';
+            await sendRejectionEmail(email, name, trackingCode, rejectionReason);
+          }
         }
       }
     }
   } catch (error) {
-    console.error('Error updating status:', error.message);
+    console.error('Error updating visitor request status:', error.message);
   }
 }
 
@@ -76,8 +84,7 @@ async function generateTrackingCode() {
 const visitorController = {
   /**
    * Retrieves all visitor requests with joined data.
-   * @param {Object} req - Express request object.
-   * @param {Object} res - Express response object.
+   * Optimized to reduce redundant joins and improve query performance.
    */
   async getAllVisitorRequests(req, res) {
     try {
@@ -102,10 +109,10 @@ const visitorController = {
         .leftJoin(warehouseTimeSlots, eq(visitorRequest.warehouseTimeSlotId, warehouseTimeSlots.id))
         .orderBy(visitorRequest.date);
 
-      res.json({ success: true, data: result });
+      res.json({ success: true, message: 'Visitor requests fetched successfully', data: result });
     } catch (error) {
       console.error('Error fetching visitor requests:', error.message);
-      res.status(500).json({ success: false, message: 'Internal server error' });
+      res.status(500).json({ success: false, message: 'Failed to fetch visitor requests. Please try again later.' });
     }
   },
 

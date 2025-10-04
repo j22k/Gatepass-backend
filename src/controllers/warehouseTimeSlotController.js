@@ -22,12 +22,12 @@ const warehouseTimeSlotController = {
         })
         .from(warehouseTimeSlots)
         .leftJoin(warehouse, eq(warehouseTimeSlots.warehouseId, warehouse.id))
-        .where(eq(warehouseTimeSlots.isActive, true)) // Filter active only
+        .where(eq(warehouseTimeSlots.isActive, true))
         .orderBy(warehouseTimeSlots.name);
-      res.json({ success: true, data: result });
+      res.json({ success: true, message: 'Warehouse time slots retrieved successfully', data: result });
     } catch (error) {
       console.error('Error fetching warehouse time slots:', error.message);
-      res.status(500).json({ success: false, message: 'Internal server error' });
+      res.status(500).json({ success: false, message: 'Failed to retrieve warehouse time slots. Please try again later.' });
     }
   },
 
@@ -40,7 +40,7 @@ const warehouseTimeSlotController = {
     try {
       const { id } = req.params;
       if (!validateUuid(id)) {
-        return res.status(400).json({ success: false, message: 'Invalid ID format' });
+        return res.status(400).json({ success: false, message: 'Invalid time slot ID format' });
       }
       const result = await db
         .select({
@@ -53,15 +53,15 @@ const warehouseTimeSlotController = {
         })
         .from(warehouseTimeSlots)
         .leftJoin(warehouse, eq(warehouseTimeSlots.warehouseId, warehouse.id))
-        .where(and(eq(warehouseTimeSlots.id, id), eq(warehouseTimeSlots.isActive, true))) // Filter active only
+        .where(and(eq(warehouseTimeSlots.id, id), eq(warehouseTimeSlots.isActive, true)))
         .limit(1);
       if (result.length === 0) {
-        return res.status(404).json({ success: false, message: 'Warehouse time slot not found' });
+        return res.status(404).json({ success: false, message: 'Time slot not found or inactive' });
       }
-      res.json({ success: true, data: result[0] });
+      res.json({ success: true, message: 'Time slot retrieved successfully', data: result[0] });
     } catch (error) {
       console.error('Error fetching warehouse time slot:', error.message);
-      res.status(500).json({ success: false, message: 'Internal server error' });
+      res.status(500).json({ success: false, message: 'Failed to retrieve time slot. Please try again later.' });
     }
   },
 
@@ -116,22 +116,23 @@ const warehouseTimeSlotController = {
       }
       const [warehouseExists] = await db.select().from(warehouse).where(eq(warehouse.id, warehouseId)).limit(1);
       if (!warehouseExists) {
-        return res.status(400).json({ success: false, message: 'Warehouse not found' });
+        return res.status(404).json({ success: false, message: 'Warehouse not found' });
       }
-      // Validate time slot does not overlap
-      const existingSlots = await db.select().from(warehouseTimeSlots).where(and(eq(warehouseTimeSlots.warehouseId, warehouseId), eq(warehouseTimeSlots.isActive, true)));
-      for (const slot of existingSlots) {
-        if ((from < slot.to && to > slot.from)) {
-          return res.status(409).json({ success: false, message: 'Time slot overlaps with an existing slot' });
-        }
-      }
-      // Ensure from < to
       if (from >= to) {
         return res.status(400).json({ success: false, message: 'Start time must be before end time' });
       }
+      const overlappingSlot = await db
+        .select()
+        .from(warehouseTimeSlots)
+        .where(and(eq(warehouseTimeSlots.warehouseId, warehouseId), eq(warehouseTimeSlots.isActive, true)))
+        .andWhere((slot) => from < slot.to && to > slot.from)
+        .limit(1);
+      if (overlappingSlot.length > 0) {
+        return res.status(409).json({ success: false, message: 'Time slot overlaps with an existing slot' });
+      }
       const result = await db
         .insert(warehouseTimeSlots)
-        .values({ name, from, to, warehouseId, isActive: true }) // Set active on create
+        .values({ name, from, to, warehouseId, isActive: true })
         .returning({
           id: warehouseTimeSlots.id,
           name: warehouseTimeSlots.name,
@@ -139,10 +140,10 @@ const warehouseTimeSlotController = {
           to: warehouseTimeSlots.to,
           warehouseId: warehouseTimeSlots.warehouseId,
         });
-      res.status(201).json({ success: true, data: result[0] });
+      res.status(201).json({ success: true, message: 'Time slot created successfully', data: result[0] });
     } catch (error) {
       console.error('Error creating warehouse time slot:', error.message);
-      res.status(500).json({ success: false, message: 'Internal server error' });
+      res.status(500).json({ success: false, message: 'Failed to create time slot. Please try again later.' });
     }
   },
 
@@ -160,7 +161,7 @@ const warehouseTimeSlotController = {
       }
       const [warehouseExists] = await db.select().from(warehouse).where(eq(warehouse.id, warehouseId)).limit(1);
       if (!warehouseExists) {
-        return res.status(400).json({ success: false, message: 'Warehouse not found' });
+        return res.status(404).json({ success: false, message: 'Warehouse not found' });
       }
       // Validate time slot does not overlap
       const existingSlots = await db.select().from(warehouseTimeSlots).where(and(eq(warehouseTimeSlots.warehouseId, warehouseId), eq(warehouseTimeSlots.isActive, true)));
@@ -183,10 +184,10 @@ const warehouseTimeSlotController = {
           to: warehouseTimeSlots.to,
           warehouseId: warehouseTimeSlots.warehouseId,
         });
-      res.status(201).json({ success: true, data: result[0] });
+      res.status(201).json({ success: true, message: 'Time slot created successfully', data: result[0] });
     } catch (error) {
       console.error('Error creating warehouse time slot by warehouse ID:', error.message);
-      res.status(500).json({ success: false, message: 'Internal server error' });
+      res.status(500).json({ success: false, message: 'Failed to create time slot. Please try again later.' });
     }
   },
 
@@ -199,17 +200,14 @@ const warehouseTimeSlotController = {
     try {
       const { id } = req.params;
       if (!validateUuid(id)) {
-        return res.status(400).json({ success: false, message: 'Invalid ID format' });
+        return res.status(400).json({ success: false, message: 'Invalid time slot ID format' });
       }
-      const { name, from, to, warehouseId, isActive } = req.body; // Allow updating isActive
+      const { name, from, to, warehouseId, isActive } = req.body;
       if (warehouseId && !validateUuid(warehouseId)) {
         return res.status(400).json({ success: false, message: 'Invalid warehouse ID format' });
       }
-      if (warehouseId) {
-        const [warehouseExists] = await db.select().from(warehouse).where(eq(warehouse.id, warehouseId)).limit(1);
-        if (!warehouseExists) {
-          return res.status(400).json({ success: false, message: 'Warehouse not found' });
-        }
+      if (from && to && from >= to) {
+        return res.status(400).json({ success: false, message: 'Start time must be before end time' });
       }
       const result = await db
         .update(warehouseTimeSlots)
@@ -217,12 +215,12 @@ const warehouseTimeSlotController = {
         .where(eq(warehouseTimeSlots.id, id))
         .returning();
       if (result.length === 0) {
-        return res.status(404).json({ success: false, message: 'Warehouse time slot not found' });
+        return res.status(404).json({ success: false, message: 'Time slot not found' });
       }
-      res.json({ success: true, data: result[0] });
+      res.json({ success: true, message: 'Time slot updated successfully', data: result[0] });
     } catch (error) {
       console.error('Error updating warehouse time slot:', error.message);
-      res.status(500).json({ success: false, message: 'Internal server error' });
+      res.status(500).json({ success: false, message: 'Failed to update time slot. Please try again later.' });
     }
   },
 
@@ -235,21 +233,20 @@ const warehouseTimeSlotController = {
     try {
       const { id } = req.params;
       if (!validateUuid(id)) {
-        return res.status(400).json({ success: false, message: 'Invalid ID format' });
+        return res.status(400).json({ success: false, message: 'Invalid time slot ID format' });
       }
-
       const result = await db
         .update(warehouseTimeSlots)
-        .set({ isActive: false }) // Soft delete: disable instead of delete
+        .set({ isActive: false })
         .where(eq(warehouseTimeSlots.id, id))
         .returning();
       if (result.length === 0) {
-        return res.status(404).json({ success: false, message: 'Warehouse time slot not found' });
+        return res.status(404).json({ success: false, message: 'Time slot not found' });
       }
-      res.json({ success: true, data: result[0] });
+      res.json({ success: true, message: 'Time slot disabled successfully', data: result[0] });
     } catch (error) {
       console.error('Error disabling warehouse time slot:', error.message);
-      res.status(500).json({ success: false, message: 'Internal server error' });
+      res.status(500).json({ success: false, message: 'Failed to disable time slot. Please try again later.' });
     }
   }
 };

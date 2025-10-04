@@ -4,8 +4,10 @@ const roleController = require('../controllers/roleController');
 
 const router = express.Router();
 
-// get all roles
-router.get('/getall', authenticateToken, authorizeRoles('Admin'), roleController.getAllRoles);
+// Apply authentication and authorization middleware to all routes in this file
+router.use(authenticateToken, authorizeRoles('Admin'));
 
+// Get all roles
+router.get('/getall', roleController.getAllRoles);
 
 module.exports = router;

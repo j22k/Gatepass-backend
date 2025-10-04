@@ -10,7 +10,7 @@ const authController = {
     try {
       const { email, password } = req.body;
 
-      const result = await db.select({
+      const user = await db.select({
         id: users.id,
         name: users.name,
         email: users.email,
@@ -24,45 +24,21 @@ const authController = {
       .from(users)
       .leftJoin(warehouse, eq(users.warehouseId, warehouse.id))
       .where(and(eq(users.email, email.toLowerCase()), eq(users.isActive, true)))
-      .limit(1);
+      .limit(1)
+      .then(result => result[0]); // Fetch the first result directly
 
-      if (result.length === 0) {
-        return res.status(401).json({
-          success: false,
-          message: 'Invalid email or password'
-        });
-      }
-
-      const user = result[0];
-
-      const isValidPassword = await bcrypt.compare(password, user.password);
-      if (!isValidPassword) {
-        return res.status(401).json({
-          success: false,
-          message: 'Invalid email or password'
-        });
+      if (!user || !(await bcrypt.compare(password, user.password))) {
+        return res.status(401).json({ success: false, message: 'Invalid email or password' });
       }
 
       const token = jwt.sign(
-        { 
-          userId: user.id,
-          email: user.email,
-          role: user.role
-        },
+        { userId: user.id, email: user.email, role: user.role },
         process.env.JWT_SECRET,
         { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
       );
 
       delete user.password;
-     
-      if (user.role === 'Admin') {
-        user.redirectTo = '/admin/admin-dashboard';
-      } else if (user.role === 'Receptionist') {
-        user.redirectTo = '/reception/reception-dashboard';
-      } else{
-        user.redirectTo = '/approver/approver-dashboard'
-      }
-      
+
       res.json({
         success: true,
         message: 'Login successful',
@@ -77,18 +53,15 @@ const authController = {
             warehouse: user.warehouseName,
             isActive: user.isActive
           },
-          redirectTo: user.redirectTo,
-          // Updated: Return only the JWT token (client should prefix "Bearer")
-          token: token
+          redirectTo: user.role === 'Admin' ? '/admin/admin-dashboard' :
+                      user.role === 'Receptionist' ? '/reception/reception-dashboard' :
+                      '/approver/approver-dashboard',
+          token
         }
       });
-
     } catch (error) {
       console.error('Login error:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Internal server error'
-      });
+      res.status(500).json({ success: false, message: 'Internal server error' });
     }
   },
 
@@ -111,19 +84,14 @@ const authController = {
       });
     } catch (error) {
       console.error('Verify token error:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Internal server error'
-      });
+      res.status(500).json({ success: false, message: 'Internal server error' });
     }
   },
   
   // Get current user profile
   async getProfile(req, res) {
     try {
-      const userId = req.user.id;
-
-      const result = await db.select({
+      const user = await db.select({
         id: users.id,
         name: users.name,
         email: users.email,
@@ -136,17 +104,13 @@ const authController = {
       })
       .from(users)
       .leftJoin(warehouse, eq(users.warehouseId, warehouse.id))
-      .where(eq(users.id, userId))
-      .limit(1);
+      .where(eq(users.id, req.user.id))
+      .limit(1)
+      .then(result => result[0]);
 
-      if (result.length === 0) {
-        return res.status(404).json({
-          success: false,
-          message: 'User not found'
-        });
+      if (!user) {
+        return res.status(404).json({ success: false, message: 'User not found' });
       }
-
-      const user = result[0];
 
       res.json({
         success: true,
@@ -166,31 +130,19 @@ const authController = {
           }
         }
       });
-
     } catch (error) {
       console.error('Get profile error:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Internal server error'
-      });
+      res.status(500).json({ success: false, message: 'Internal server error' });
     }
   },
 
   // Logout user (optional - mainly for token blacklisting if implemented)
   async logout(req, res) {
     try {
-      // In a more advanced setup, you might want to blacklist the token
-      // For now, just return a success message
-      res.json({
-        success: true,
-        message: 'Logout successful'
-      });
+      res.json({ success: true, message: 'Logout successful' });
     } catch (error) {
       console.error('Logout error:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Internal server error'
-      });
+      res.status(500).json({ success: false, message: 'Internal server error' });
     }
   }
 };

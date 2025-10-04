@@ -5,11 +5,10 @@ const roleController = {
   // Get all roles (fixed enum values, no database query)
   async getAllRoles(req, res) {
     try {
-      // Return fixed roles as per schema enum
-      const roles = ['Admin', 'Receptionist', 'Approver'];
+      // Return fixed roles directly
       res.json({
         success: true,
-        data: roles
+        data: ['Admin', 'Receptionist', 'Approver']
       });
     } catch (error) {
       console.error('Get all roles error:', error);
