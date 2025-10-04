@@ -95,6 +95,7 @@ const visitorController = {
           phone: visitorRequest.phone,
           email: visitorRequest.email,
           accompanying: visitorRequest.accompanying,
+          allergenInformation: visitorRequest.allergenInformation, // Added
           date: visitorRequest.date,
           status: visitorRequest.status,
           visitorTypeName: visitorTypes.name,
@@ -133,6 +134,7 @@ const visitorController = {
           warehouseId: visitorRequest.warehouseId,
           warehouseTimeSlotId: visitorRequest.warehouseTimeSlotId,
           accompanying: visitorRequest.accompanying,
+          allergenInformation: visitorRequest.allergenInformation, // Added
           date: visitorRequest.date,
           status: visitorRequest.status,
           visitorTypeName: visitorTypes.name,
@@ -171,6 +173,7 @@ const visitorController = {
           phone: visitorRequest.phone,
           email: visitorRequest.email,
           accompanying: visitorRequest.accompanying,
+          allergenInformation: visitorRequest.allergenInformation, // Added
           date: visitorRequest.date,
           status: visitorRequest.status,
           visitorTypeName: visitorTypes.name,
@@ -209,6 +212,7 @@ const visitorController = {
           phone: visitorRequest.phone,
           email: visitorRequest.email,
           accompanying: visitorRequest.accompanying,
+          allergenInformation: visitorRequest.allergenInformation, // Added
           date: visitorRequest.date,
           status: visitorRequest.status,
           visitorTypeName: visitorTypes.name,
@@ -257,6 +261,7 @@ const visitorController = {
           phone: visitorRequest.phone,
           email: visitorRequest.email,
           accompanying: visitorRequest.accompanying,
+          allergenInformation: visitorRequest.allergenInformation, // Added
           date: visitorRequest.date,
           status: visitorRequest.status,
           visitorTypeName: visitorTypes.name,
@@ -295,6 +300,7 @@ const visitorController = {
           phone: visitorRequest.phone,
           email: visitorRequest.email,
           accompanying: visitorRequest.accompanying,
+          allergenInformation: visitorRequest.allergenInformation, // Added
           date: visitorRequest.date,
           status: visitorRequest.status,
           visitorTypeName: visitorTypes.name,
@@ -319,11 +325,16 @@ const visitorController = {
   },
 
   // Create a new visitor request
-  // req.body: { name, phone, email, visitorTypeId, warehouseId, warehouseTimeSlotId, accompanying, date }
-  // response: { success: true, data: { id, name, phone, email, visitorTypeId, warehouseId, warehouseTimeSlotId, accompanying, date, status, trackingCode } }
+  // req.body: { name, phone, email, visitorTypeId, warehouseId, warehouseTimeSlotId, accompanying, date, allergenInformation, declarationAcknowledged }
+  // response: { success: true, data: { id, name, phone, email, visitorTypeId, warehouseId, warehouseTimeSlotId, accompanying, allergenInformation, declarationAcknowledged, date, status, trackingCode } }
   async createVisitorRequest(req, res) {
     try {
-      const { name, phone, email, visitorTypeId, warehouseId, warehouseTimeSlotId, accompanying, date } = req.body;
+      const { name, phone, email, visitorTypeId, warehouseId, warehouseTimeSlotId, accompanying, date, allergenInformation, declarationAcknowledged } = req.body;
+
+      // Validate declaration acknowledgment
+      if (!declarationAcknowledged) {
+        return res.status(400).json({ success: false, message: 'Declaration must be acknowledged' });
+      }
 
       // Validate foreign keys
       const [visitorTypeExists] = await db.select().from(visitorTypes).where(eq(visitorTypes.id, visitorTypeId)).limit(1);
@@ -389,6 +400,8 @@ const visitorController = {
           warehouseId,
           warehouseTimeSlotId,
           accompanying: accompanying || [],
+          allergenInformation: allergenInformation || {}, // Added
+          declarationAcknowledged, // Added
           date,
           trackingCode,
         })
@@ -401,6 +414,8 @@ const visitorController = {
           warehouseId: visitorRequest.warehouseId,
           warehouseTimeSlotId: visitorRequest.warehouseTimeSlotId,
           accompanying: visitorRequest.accompanying,
+          allergenInformation: visitorRequest.allergenInformation, // Added
+          declarationAcknowledged: visitorRequest.declarationAcknowledged, // Added
           date: visitorRequest.date,
           status: visitorRequest.status,
           trackingCode: visitorRequest.trackingCode,
@@ -423,6 +438,7 @@ const visitorController = {
           name: visitorRequest.name,
           status: visitorRequest.status,
           date: visitorRequest.date,
+          allergenInformation: visitorRequest.allergenInformation, // Added
           visitorTypeName: visitorTypes.name,
           warehouseName: warehouse.name,
           timeSlotName: warehouseTimeSlots.name,
@@ -463,15 +479,15 @@ const visitorController = {
   },
 
   // Update a visitor request
-  // req.body: { name, phone, email, visitorTypeId, warehouseId, warehouseTimeSlotId, accompanying, date, status }
-  // response: { success: true, data: { id, name, phone, email, visitorTypeId, warehouseId, warehouseTimeSlotId, accompanying, date, status } }
+  // req.body: { name, phone, email, visitorTypeId, warehouseId, warehouseTimeSlotId, accompanying, date, status, allergenInformation, declarationAcknowledged }
+  // response: { success: true, data: { id, name, phone, email, visitorTypeId, warehouseId, warehouseTimeSlotId, accompanying, allergenInformation, declarationAcknowledged, date, status } }
   async updateVisitorRequest(req, res) {
     try {
       const { id } = req.params;
       if (!validateUuid(id)) { // Validate ID format
         return res.status(400).json({ success: false, message: 'Invalid ID format' });
       }
-      const { name, phone, email, visitorTypeId, warehouseId, warehouseTimeSlotId, accompanying, date, status } = req.body;
+      const { name, phone, email, visitorTypeId, warehouseId, warehouseTimeSlotId, accompanying, date, status, allergenInformation, declarationAcknowledged } = req.body;
 
       // Validate foreign keys if provided
       if (visitorTypeId) {
@@ -497,7 +513,7 @@ const visitorController = {
 
       const result = await db
         .update(visitorRequest)
-        .set({ name, phone, email, visitorTypeId, warehouseId, warehouseTimeSlotId, accompanying, date, status })
+        .set({ name, phone, email, visitorTypeId, warehouseId, warehouseTimeSlotId, accompanying, date, status, allergenInformation, declarationAcknowledged })
         .where(eq(visitorRequest.id, id))
         .returning();
 
@@ -633,6 +649,7 @@ const visitorController = {
           phone: visitorRequest.phone,
           email: visitorRequest.email,
           accompanying: visitorRequest.accompanying,
+          allergenInformation: visitorRequest.allergenInformation, // Added
           date: visitorRequest.date,
           status: visitorRequest.status,
           trackingCode: visitorRequest.trackingCode,
@@ -678,6 +695,7 @@ const visitorController = {
           phone: visitorRequest.phone,
           email: visitorRequest.email,
           accompanying: visitorRequest.accompanying,
+          allergenInformation: visitorRequest.allergenInformation, // Added
           date: visitorRequest.date,
           status: visitorRequest.status,
           trackingCode: visitorRequest.trackingCode,

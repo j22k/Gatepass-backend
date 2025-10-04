@@ -57,6 +57,8 @@ exports.up = (pgm) => {
       warehouse_id UUID NOT NULL REFERENCES warehouse(id),
       warehouse_time_slot_id UUID NOT NULL REFERENCES warehouse_time_slots(id),
       accompanying JSONB DEFAULT '[]',
+      allergen_information JSONB DEFAULT '{}'::jsonb, -- Added column for allergen information
+      declaration_acknowledged BOOLEAN DEFAULT FALSE, -- Added column for declaration confirmation
       date DATE NOT NULL CHECK (date >= CURRENT_DATE),
       status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
 

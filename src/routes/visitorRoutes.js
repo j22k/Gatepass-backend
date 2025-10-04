@@ -45,7 +45,8 @@ router.post('/create', [
 	check('warehouseId').isUUID().withMessage('Invalid warehouseId'),
 	check('warehouseTimeSlotId').isUUID().withMessage('Invalid warehouseTimeSlotId'),
 	check('accompanying').optional().isArray(),
-	check('date').isISO8601().toDate().withMessage('Invalid date format')
+	check('date').isISO8601().toDate().withMessage('Invalid date format'),
+	check('declarationAcknowledged').isBoolean().withMessage('Declaration acknowledgment is required and must be true')
 ], validateRequest, asyncHandler(visitorController.createVisitorRequest));
 
 // Update a visitor request
@@ -59,7 +60,8 @@ router.put('/:id', [
 	check('warehouseTimeSlotId').optional().isUUID().withMessage('Invalid warehouseTimeSlotId'),
 	check('accompanying').optional().isArray(),
 	check('date').optional().isISO8601().toDate().withMessage('Invalid date format'),
-	check('status').optional().isIn(['pending','approved','rejected']).withMessage('Invalid status')
+	check('status').optional().isIn(['pending','approved','rejected']).withMessage('Invalid status'),
+	check('declarationAcknowledged').optional().isBoolean().withMessage('Declaration acknowledgment must be a boolean')
 ], validateRequest, receptionistAuth, asyncHandler(visitorController.updateVisitorRequest));
 
 // Approve a visitor request
