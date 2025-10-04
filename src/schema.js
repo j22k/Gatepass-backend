@@ -64,6 +64,7 @@ const visitorRequest = pgTable('visitor_request', {
   checkedOutAt: timestamp('checked_out_at'),  // Added
   allergenInformation: jsonb('allergen_information').default(sql`'{}'::jsonb`),  // Added: JSONB field for allergen information with default empty object
   declarationAcknowledged: boolean('declaration_acknowledged').default(false),  // Added: BOOLEAN field for declaration acknowledgment with default false
+  reason: text('reason'),  // Added: TEXT field for rejection reason
   createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
   updatedAt: timestamp('updated_at').default(sql`CURRENT_TIMESTAMP`),
 });

@@ -71,6 +71,7 @@ exports.up = (pgm) => {
       checked_out_at TIMESTAMP,                                     -- Actual checkout time
 
       tracking_code VARCHAR(8) UNIQUE,  -- Short code for guest tracking
+      reason TEXT,  -- Added: Column for rejection reason
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );

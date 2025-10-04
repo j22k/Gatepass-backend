@@ -29,7 +29,12 @@ async function updateVisitorRequestStatus(visitorRequestId) {
       : 'pending';
 
     if (newStatus !== previousStatus) {
-      await db.update(visitorRequest).set({ status: newStatus }).where(eq(visitorRequest.id, visitorRequestId));
+      const updateData = { status: newStatus };
+      if (newStatus === 'rejected') {
+        const rejectionReason = approvals.find(a => a.status === 'rejected')?.reason || 'No specific reason provided';
+        updateData.reason = rejectionReason;
+      }
+      await db.update(visitorRequest).set(updateData).where(eq(visitorRequest.id, visitorRequestId));
 
       if (['approved', 'rejected'].includes(newStatus)) {
         const visitorDetails = await db
@@ -103,6 +108,7 @@ const visitorController = {
           timeSlotName: warehouseTimeSlots.name,
           from: warehouseTimeSlots.from,
           to: warehouseTimeSlots.to,
+          reason: visitorRequest.reason,  // Added: Include reason in response
         })
         .from(visitorRequest)
         .leftJoin(visitorTypes, eq(visitorRequest.visitorTypeId, visitorTypes.id))
@@ -140,6 +146,7 @@ const visitorController = {
           visitorTypeName: visitorTypes.name,
           warehouseName: warehouse.name,
           timeSlotName: warehouseTimeSlots.name,
+          reason: visitorRequest.reason,  // Added: Include reason in response
         })
         .from(visitorRequest)
         .leftJoin(visitorTypes, eq(visitorRequest.visitorTypeId, visitorTypes.id))
@@ -181,6 +188,7 @@ const visitorController = {
           timeSlotName: warehouseTimeSlots.name,
           from: warehouseTimeSlots.from,
           to: warehouseTimeSlots.to,
+          reason: visitorRequest.reason,  // Added: Include reason in response
         })
         .from(visitorRequest)
         .innerJoin(approval, eq(visitorRequest.id, approval.visitorRequestId))
@@ -220,6 +228,7 @@ const visitorController = {
           timeSlotName: warehouseTimeSlots.name,
           from: warehouseTimeSlots.from,
           to: warehouseTimeSlots.to,
+          reason: visitorRequest.reason,  // Added: Include reason in response
         })
         .from(visitorRequest)
         .innerJoin(approval, eq(visitorRequest.id, approval.visitorRequestId))
@@ -269,6 +278,7 @@ const visitorController = {
           timeSlotName: warehouseTimeSlots.name,
           from: warehouseTimeSlots.from,
           to: warehouseTimeSlots.to,
+          reason: visitorRequest.reason,  // Added: Include reason in response
         })
         .from(visitorRequest)
         .innerJoin(approval, eq(visitorRequest.id, approval.visitorRequestId))
@@ -308,6 +318,7 @@ const visitorController = {
           timeSlotName: warehouseTimeSlots.name,
           from: warehouseTimeSlots.from,
           to: warehouseTimeSlots.to,
+          reason: visitorRequest.reason,  // Added: Include reason in response
         })
         .from(visitorRequest)
         .innerJoin(approval, eq(visitorRequest.id, approval.visitorRequestId))
@@ -442,6 +453,7 @@ const visitorController = {
           visitorTypeName: visitorTypes.name,
           warehouseName: warehouse.name,
           timeSlotName: warehouseTimeSlots.name,
+          reason: visitorRequest.reason,  // Added: Include reason in response
         })
         .from(visitorRequest)
         .leftJoin(visitorTypes, eq(visitorRequest.visitorTypeId, visitorTypes.id))
@@ -487,7 +499,7 @@ const visitorController = {
       if (!validateUuid(id)) { // Validate ID format
         return res.status(400).json({ success: false, message: 'Invalid ID format' });
       }
-      const { name, phone, email, visitorTypeId, warehouseId, warehouseTimeSlotId, accompanying, date, status, allergenInformation, declarationAcknowledged } = req.body;
+      const { name, phone, email, visitorTypeId, warehouseId, warehouseTimeSlotId, accompanying, date, status, allergenInformation, declarationAcknowledged, reason } = req.body;
 
       // Validate foreign keys if provided
       if (visitorTypeId) {
@@ -513,7 +525,7 @@ const visitorController = {
 
       const result = await db
         .update(visitorRequest)
-        .set({ name, phone, email, visitorTypeId, warehouseId, warehouseTimeSlotId, accompanying, date, status, allergenInformation, declarationAcknowledged })
+        .set({ name, phone, email, visitorTypeId, warehouseId, warehouseTimeSlotId, accompanying, date, status, allergenInformation, declarationAcknowledged, reason })  // Added: Include reason in set
         .where(eq(visitorRequest.id, id))
         .returning();
 
@@ -662,6 +674,7 @@ const visitorController = {
           timeSlotName: warehouseTimeSlots.name,
           from: warehouseTimeSlots.from,
           to: warehouseTimeSlots.to,
+          reason: visitorRequest.reason,  // Added: Include reason in response
         })
         .from(visitorRequest)
         .leftJoin(visitorTypes, eq(visitorRequest.visitorTypeId, visitorTypes.id))
@@ -708,6 +721,7 @@ const visitorController = {
           timeSlotName: warehouseTimeSlots.name,
           from: warehouseTimeSlots.from,
           to: warehouseTimeSlots.to,
+          reason: visitorRequest.reason,  // Added: Include reason in response
         })
         .from(visitorRequest)
         .leftJoin(visitorTypes, eq(visitorRequest.visitorTypeId, visitorTypes.id))
