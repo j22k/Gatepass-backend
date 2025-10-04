@@ -59,14 +59,15 @@ app.use((req, res) => {
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`🚀 Server is running on port ${PORT}`);
-  console.log(`📱 API Health Check: http://localhost:${PORT}/health`);
-  console.log(`🔐 Auth Login: http://localhost:${PORT}/api/auth/login`);
-  // Log environment info securely
+const HOST = '0.0.0.0';  // <-- listen on all network interfaces
+app.listen(PORT, HOST, () => {
+  console.log(`🚀 Server is running on http://${HOST}:${PORT}`);
+  console.log(`📱 API Health Check: http://${HOST}:${PORT}/health`);
+  console.log(`🔐 Auth Login: http://${HOST}:${PORT}/api/auth/login`);
   if (process.env.NODE_ENV === 'development') {
     console.log(`Environment: ${process.env.NODE_ENV}`);
   }
 });
+
 
 module.exports = app;
