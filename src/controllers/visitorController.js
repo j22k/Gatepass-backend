@@ -425,11 +425,12 @@ const visitorController = {
           warehouseId: visitorRequest.warehouseId,
           warehouseTimeSlotId: visitorRequest.warehouseTimeSlotId,
           accompanying: visitorRequest.accompanying,
-          allergenInformation: visitorRequest.allergenInformation, // Added
-          declarationAcknowledged: visitorRequest.declarationAcknowledged, // Added
+          allergenInformation: visitorRequest.allergenInformation,
+          declarationAcknowledged: visitorRequest.declarationAcknowledged,
           date: visitorRequest.date,
           status: visitorRequest.status,
           trackingCode: visitorRequest.trackingCode,
+          reason: visitorRequest.reason
         });
 
       res.status(201).json({ success: true, data: result[0] });
